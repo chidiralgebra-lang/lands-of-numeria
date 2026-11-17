@@ -1,0 +1,6 @@
+{
+  "name": "Battle of Knowledge: Math Monster Adventure",
+  "description": "Game edukasi RPG matematika 2D interaktif dengan petualangan multi-area, sistem kuis adaptif, mode tim lokal & kelas daring, serta panel guru dengan ekstraksi soal berbasis dokumen.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

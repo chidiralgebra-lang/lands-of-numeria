@@ -1,0 +1,271 @@
+BATTLE OF KNOWLEDGE
+MATH MONSTER ADVENTURE
+MASTER PROMPT UNTUK GEMINI AI / GOOGLE AI STUDIO
+CARA PAKAI: Salin seluruh prompt ini ke Gemini AI atau Google AI Studio. Jika tersedia, lampirkan kisi-kisi, kumpulan soal, modul, buku, atau bahan ajar matematika. Minta AI menghasilkan aplikasi game yang benar-benar berfungsi, bukan sekadar desain atau prototipe visual.
+
+Catatan penggunaan: Prompt ini dirancang sebagai spesifikasi utama. Jika platform AI memiliki batas keluaran, minta AI melanjutkan implementasi dari bagian terakhir tanpa mengulang atau menghilangkan fitur.
+A. PERAN AI
+Bertindaklah sebagai Senior HTML5 Game Developer, JavaScript Engineer, Game Systems Designer, UI/UX Designer, Educational Game Developer, Instructional Designer, Database/Backend Architect, Accessibility Specialist, dan Guru Matematika.
+Bangun GAME EDUKASI INTERAKTIF berbasis web berjudul:
+BATTLE OF KNOWLEDGE — MATH MONSTER ADVENTURE
+Game bergaya fantasy RPG adventure. Siswa memilih hero, menjelajahi dunia, menghadapi monster, dan menggunakan kemampuan matematika untuk menyerang. Setiap jawaban benar menghasilkan serangan, energi, koin, atau kemajuan misi. Game harus memiliki kualitas visual dan pengalaman bermain seperti produk edukasi profesional.
+Game ditujukan untuk latihan, penguatan konsep, dan evaluasi pembelajaran matematika. Sistem materi harus dapat disesuaikan dengan kelas, jenjang, kurikulum, dan dokumen yang disediakan guru.
+Prioritas utama: permainan benar-benar dapat dimainkan; semua tombol dan alur berfungsi; soal akurat; data hasil belajar dapat ditinjau guru; dan aplikasi dapat dipublikasikan melalui web.
+B. PENGATURAN MATERI DAN BANK SOAL OTOMATIS
+Gunakan dokumen yang diunggah guru sebagai sumber utama konten pembelajaran. Dokumen yang dapat digunakan meliputi:
+•	Kisi-kisi asesmen atau ujian.
+•	Kumpulan soal pilihan ganda, isian, dan uraian.
+•	Materi pembelajaran, modul ajar, buku pelajaran, atau lembar kerja.
+•	Dokumen Word, PDF, Excel, teks, dan gambar yang dapat dibaca.
+Lakukan proses berikut:
+1.	Baca seluruh dokumen yang dapat diakses dan identifikasi halaman/bagian yang relevan.
+2.	Identifikasi jenjang/kelas, semester, topik, subtopik, kompetensi, tujuan, dan indikator pembelajaran jika tercantum.
+3.	Ekstrak soal, opsi, kunci jawaban, pembahasan, rumus, contoh, dan batasan materi yang tersedia.
+4.	Jika dokumen berupa kisi-kisi atau materi, susun soal yang selaras dengan setiap indikator dan tingkat kelas.
+5.	Jika dokumen sudah berisi soal, pertahankan maksud, data, konteks, dan tingkat kesulitan soal asli.
+6.	Buat variasi soal tambahan hanya jika diminta atau jika jumlah soal tidak mencukupi; tandai sebagai soal hasil pengembangan AI.
+7.	Periksa ulang perhitungan, satuan, notasi, kunci, dan pembahasan secara independen.
+8.	Hindari soal di luar cakupan sumber dan jangan mengarang informasi yang tidak terbaca.
+9.	Beri label sumber/indikator untuk setiap soal agar guru dapat menelusuri asalnya.
+10.	Masukkan soal yang telah divalidasi ke bank soal yang digunakan game.
+Jika bagian dokumen tidak terbaca, ambigu, atau tidak memuat kunci yang dapat dipastikan, jangan mengarang. Tandai untuk verifikasi guru. Jika tidak ada dokumen, tampilkan pemberitahuan agar guru memasukkan soal atau materi; sediakan hanya data demo yang diberi label JELAS sebagai contoh, bukan dianggap berasal dari dokumen.
+Struktur data setiap soal
+•	ID unik, mata pelajaran, kelas/jenjang, topik, subtopik, indikator, sumber dokumen/halaman jika tersedia.
+•	Tingkat kesulitan: mudah, sedang, sulit.
+•	Jenis soal: pilihan ganda, isian numerik/teks, atau uraian.
+•	Teks pertanyaan, gambar/diagram jika diperlukan, opsi jawaban, kunci, alternatif jawaban yang diterima.
+•	Pembahasan langkah demi langkah, skor, estimasi waktu, dan tag kompetensi.
+•	Status verifikasi: tervalidasi guru, tervalidasi otomatis, atau perlu ditinjau.
+Untuk soal hitungan, simpan nilai numerik dan satuan secara terstruktur jika memungkinkan. Pemeriksaan jawaban harus mempertimbangkan koma/titik desimal, spasi, satuan, bentuk pecahan yang setara, dan toleransi pembulatan yang dinyatakan dalam soal. Jangan menganggap jawaban uraian telah benar hanya karena mengandung satu kata kunci.
+Untuk mode kompetitif, susun paket soal paralel: jumlah, topik, indikator, dan tingkat kesulitan setara, tetapi jangan memberikan pertanyaan identik kepada peserta yang sedang bertanding.
+C. SPESIFIKASI TEKNIS
+Bangun aplikasi menggunakan teknologi web standar:
+•	HTML5, CSS3, dan JavaScript modular.
+•	Canvas 2D atau DOM/CSS animation untuk arena dan efek visual; gunakan requestAnimationFrame untuk animasi yang sesuai.
+•	Web Audio API untuk efek suara orisinal; audio baru aktif setelah interaksi pengguna.
+•	LocalStorage atau IndexedDB untuk penyimpanan lokal dan mode offline terbatas.
+•	Arsitektur data yang dapat ditingkatkan ke backend/database untuk kelas, akun, hasil, dan leaderboard daring.
+Ketentuan teknis wajib:
+11.	Desain utama berorientasi 16:9, dengan resolusi acuan 1280 × 720.
+12.	Responsif untuk laptop, tablet, ponsel, dan papan interaktif digital.
+13.	Tidak boleh terjadi scroll horizontal. Pada layar pendek, gunakan panel/modal yang terukur dan tata letak adaptif.
+14.	Mendukung mouse, keyboard, dan touchscreen.
+15.	Semua tombol, navigasi, modal, kontrol, penyimpanan, impor, ekspor, dan perhitungan skor harus berfungsi.
+16.	Game dapat dimainkan tanpa akun pada mode lokal; fitur kelas daring boleh memerlukan kode kelas atau koneksi.
+17.	Sediakan indikator loading, pesan kesalahan, konfirmasi hapus, dan keadaan kosong.
+18.	Gunakan kode yang terstruktur, komentar seperlunya, dan pisahkan data soal dari logika game.
+19.	Jangan menggunakan aset berhak cipta tanpa izin. Buat aset orisinal berbasis CSS/Canvas/SVG atau gunakan aset legal.
+20.	Jangan menaruh API key atau rahasia layanan di frontend.
+21.	Jika backend tidak tersedia, jangan berpura-pura fitur multiplayer daring aktif; sediakan mode lokal dan jelaskan batasannya.
+Output ideal berupa proyek yang dapat dijalankan. Jika memungkinkan sediakan satu file index.html untuk versi mandiri. Jika memakai banyak file, berikan struktur folder dan seluruh isi file yang diperlukan.
+D. KONSEP VISUAL DAN IDENTITAS GAME
+Gunakan gaya 2D fantasy RPG cartoon premium: warna kaya, karakter ekspresif, bentuk bersih, outline halus, pencahayaan magis, animasi responsif, dan antarmuka yang mudah dipahami siswa.
+Dunia permainan terdiri dari beberapa wilayah, misalnya:
+•	Hutan Bilangan — operasi hitung dan bilangan.
+•	Gua Pecahan — pecahan, desimal, dan persen.
+•	Kastil Geometri — bangun datar, bangun ruang, keliling, dan luas.
+•	Gunung Aljabar — pola, variabel, persamaan, dan fungsi.
+•	Menara Logika — data, peluang, dan penalaran.
+DUNIA PERMAINAN WAJIB TERBAGI MENJADI BEBERAPA AREA
+Jadikan game sebagai petualangan multi-area, bukan satu arena panjang dengan monster yang sama. Setiap area harus memiliki identitas visual, tema matematika, tantangan, monster penjaga, dan bos area yang berbeda. Siswa melihat peta dunia dan memilih area yang telah terbuka.
+Contoh rancangan area (dapat diubah atau ditambah oleh guru):
+1. Hutan Bilangan — tema operasi bilangan; monster: Slime Angka; bos: Raja Slime.
+2. Gua Pecahan — tema pecahan, desimal, dan persen; monster: Kelelawar Pecahan; bos: Golem Pecahan.
+3. Kastil Geometri — tema bangun datar, bangun ruang, keliling, dan luas; monster: Penjaga Sudut; bos: Naga Geometri.
+4. Gunung Aljabar — tema pola, variabel, persamaan, dan fungsi; monster: Serigala Persamaan; bos: Raksasa Aljabar.
+5. Menara Logika — tema data, peluang, pola, dan penalaran; monster: Burung Teka-Teki; bos: Penyihir Logika.
+6. Dimensi Tantangan — area khusus soal campuran atau level pengayaan; monster dan bos dapat mengambil variasi dari seluruh area.
+Ketentuan wajib untuk setiap area:
+• Memiliki nama, latar, palet warna, musik/ambience, dekorasi, ikon peta, dan efek visual khas yang membedakannya dari area lain.
+• Memiliki monster reguler yang unik dari segi bentuk, nama, animasi, HP, kekuatan, pola serangan, dan perilaku. Jangan hanya mengganti warna monster yang sama.
+• Memiliki minimal satu bos utama dengan desain, nama, ukuran, animasi, HP, pola serangan, dan fase pertarungan khusus. Bos harus menjadi puncak tantangan area.
+• Memiliki bank soal atau filter bank soal yang terhubung dengan topik/indikator area tersebut. Monster di area itu harus menguji materi yang sesuai.
+• Memiliki beberapa level atau gelombang tantangan. Variasikan monster reguler, mini-bos, dan bos utama secara bertahap.
+• Menampilkan pratinjau area, tingkat kesulitan, topik matematika, progres penyelesaian, serta status terkunci/terbuka pada peta.
+• Kemenangan atas bos area membuka area berikutnya atau hadiah/progres khusus. Guru dapat mengatur urutan, prasyarat, dan apakah area dapat dimainkan bebas.
+• Jika siswa kalah, sediakan kesempatan mencoba kembali, latihan pada indikator yang belum dikuasai, atau bantuan bertahap. Hindari hukuman yang membuat siswa enggan belajar.
+• Guru dapat menambah, mengubah, menghapus, mengurutkan, mengunci/membuka area, menetapkan monster dan bos, serta menghubungkan area dengan paket soal melalui Panel Guru.
+• Jangan mengunci jumlah area menjadi lima. Lima area di atas hanya contoh awal; sistem harus mendukung area tambahan tanpa mengubah kode inti game.
+• Jika jumlah soal untuk suatu area belum mencukupi, beri peringatan kepada guru dan jangan diam-diam mengambil soal dari topik yang tidak relevan.
+Nama wilayah dan materi harus dapat diubah guru sesuai dokumen. Jangan mengunci game hanya pada topik contoh.
+Elemen visual:
+•	Latar berlapis dengan parallax ringan, awan, pepohonan, batu, kristal, gerbang, dan bangunan fantasi.
+•	Arena pertarungan dengan hero di satu sisi dan monster di sisi lain.
+•	Health bar/HP, energi, skor, koin, level, progress misi, dan timer jika digunakan.
+•	Efek serangan, perisai, ledakan magis, angka damage, kilau jawaban benar, dan animasi terkena serangan.
+•	Panel soal dengan kontras tinggi, huruf terbaca, ruang cukup untuk rumus, pecahan, simbol, dan gambar.
+•	Tampilan konsisten untuk menu, peta, arena, panel guru, hasil, dan pengaturan.
+Hindari tampilan yang terlalu ramai. Jangan memakai emoji sebagai aset utama karakter. Gunakan ilustrasi karakter orisinal atau gambar vektor/CSS/Canvas yang konsisten.
+E. KARAKTER HERO DAN MONSTER
+Sediakan minimal 4 hero yang dapat dipilih, masing-masing dengan nama, ilustrasi, warna, animasi, dan atribut kosmetik. Contoh arketipe: Ksatria, Penyihir, Penjelajah, dan Penjaga Hutan.
+Hero memiliki animasi idle, berjalan/berlari, menyerang, menerima serangan, menang, kalah, dan menggunakan kemampuan khusus. Karakter harus terbaca jelas pada layar kecil.
+Sediakan beberapa monster dengan desain, nama, HP, tingkat kesulitan, dan pola serangan berbeda. Contoh: Slime Angka, Golem Pecahan, Serigala Persamaan, Naga Geometri, dan Bos Raja Matematika. Monster dan atributnya harus dapat diperluas.
+Kekuatan monster meningkat secara bertahap. Pastikan tingkat kesulitan adil dan dapat dikonfigurasi guru. Hindari hukuman berlebihan karena siswa sedang belajar.
+F. HALAMAN AWAL DAN NAVIGASI
+Buat halaman awal dengan logo BATTLE OF KNOWLEDGE, ilustrasi hero menghadapi monster, animasi latar, serta tombol:
+•	MULAI BERMAIN.
+•	PANEL GURU.
+•	CARA BERMAIN.
+•	PENGATURAN AUDIO dan tampilan.
+•	MASUK KELAS / GABUNG DENGAN KODE (jika fitur kelas daring tersedia).
+Semua navigasi harus berfungsi. Berikan transisi halus dan tombol kembali yang konsisten. Sediakan opsi aksesibilitas seperti ukuran teks, kontras, dan pengurangan animasi.
+G. MODE PERMAINAN
+MODE 1 — SOLO ADVENTURE
+Satu siswa bermain sendiri melalui peta petualangan.
+Alur: pilih nama → pilih hero → pilih kelas/paket materi/tingkat kesulitan → pilih wilayah → masuk arena → jawab soal untuk menyerang → kalahkan monster → dapatkan reward → buka level berikutnya → lihat laporan hasil.
+•	Setiap level memiliki target soal dan monster yang sesuai.
+•	Sediakan checkpoint agar siswa dapat melanjutkan progres.
+•	Pemain dapat mengulang level untuk latihan dan memperbaiki penguasaan.
+•	Urutan soal diacak tanpa mengulang soal dalam satu sesi kecuali bank soal tidak mencukupi; jika soal terpaksa berulang, beri pemberitahuan.
+MODE 2 — TEAM BATTLE / KELOMPOK
+Sediakan dua pilihan implementasi yang jelas:
+•	Local Team Battle: dua pemain atau dua tim bergantian pada satu perangkat. Tampilkan giliran dengan jelas dan sembunyikan jawaban dari tim yang belum mendapat giliran.
+•	Online Class Battle: beberapa siswa bergabung melalui kode kelas dan bertanding melalui perangkat masing-masing. Gunakan backend real-time yang benar-benar tersedia; sinkronkan soal, timer, jawaban, skor, dan status sesi.
+Aturan kompetisi:
+22.	Guru membuat sesi dan menentukan mode, jumlah pemain/tim, materi, jumlah soal, durasi, dan aturan skor.
+23.	Siswa memasukkan nama dan kode kelas/sesi.
+24.	Sistem membagikan soal berbeda tetapi setara berdasarkan topik dan kesulitan.
+25.	Setiap peserta memiliki skor dan statistik sendiri.
+26.	Jika memakai giliran, tampilkan indikator giliran dan jangan membocorkan jawaban kepada tim lain.
+27.	Jika memakai online real-time, tangani koneksi terputus, peserta terlambat, pengiriman jawaban ganda, dan sinkronisasi timer.
+28.	Akhiri sesi setelah kondisi selesai dan tampilkan hasil seluruh peserta sesuai izin guru.
+Jangan menyebut mode online multiplayer tersedia jika belum ada server/backend. Jika hanya frontend yang dihasilkan, implementasikan Local Team Battle dan siapkan antarmuka integrasi backend sebagai pengembangan terpisah.
+H. MEKANISME PERTARUNGAN
+Pertarungan harus memiliki alur yang mudah dipahami:
+29.	Monster muncul dan memperlihatkan HP serta tingkat ancaman.
+30.	Panel soal tampil. Game dapat menghentikan sementara aksi pertarungan agar siswa fokus membaca.
+31.	Siswa memilih jawaban, mengetik jawaban, atau mengirim uraian sesuai tipe soal.
+32.	Sistem memeriksa jawaban berdasarkan kunci dan aturan penilaian.
+33.	Jika benar, hero melakukan serangan; monster kehilangan HP dan siswa mendapat poin/energi/koin.
+34.	Jika salah, tampilkan jawaban atau petunjuk sesuai pengaturan guru. Monster dapat melakukan serangan ringan atau pemain kehilangan sedikit energi.
+35.	Tampilkan pembahasan singkat sebelum melanjutkan.
+36.	Jika HP monster habis, tampilkan animasi kemenangan dan reward.
+37.	Jika HP hero habis, tawarkan coba lagi, petunjuk, atau mode latihan; jangan menghapus hasil belajar.
+Serangan dapat memiliki variasi visual: tebasan, bola energi, panah cahaya, atau mantra angka. Variasi visual tidak boleh mengubah kebenaran akademik jawaban.
+Sediakan sistem bantuan opsional: petunjuk bertahap, eliminasi satu opsi, atau kesempatan kedua. Guru dapat mengaktifkan/menonaktifkannya.
+I. SISTEM KUIS DAN PENILAIAN
+Jenis soal yang didukung:
+•	Pilihan ganda dengan 2–5 opsi, umumnya 4 opsi.
+•	Benar/salah.
+•	Isian numerik atau teks singkat.
+•	Soal uraian dengan penilaian manual guru atau rubrik yang dapat ditinjau.
+Untuk setiap soal tampilkan nomor, topik, indikator, tingkat kesulitan, pertanyaan, opsi/input, dan progres. Dukungan notasi matematika harus mencakup pangkat, akar, pecahan, tanda operasi, persamaan, satuan, dan simbol geometri.
+Aturan umpan balik:
+•	Benar: animasi hero menyerang, efek positif, suara, poin, dan pembahasan.
+•	Salah: animasi serangan monster yang ringan, umpan balik yang ramah, jawaban benar dan pembahasan sesuai pengaturan.
+•	Jangan mempermalukan atau memberi label negatif kepada siswa.
+•	Untuk uraian, jangan memberi nilai otomatis yang seolah-olah pasti. Tampilkan rubrik dan tandai untuk penilaian guru jika evaluasi tidak dapat dilakukan secara objektif.
+Skor dasar dapat dikonfigurasi guru. Rekomendasi awal: benar 100 poin; bonus tingkat sulit; bonus konsistensi atau waktu hanya jika diaktifkan. Salah tidak harus mengurangi nilai akademik; pisahkan skor permainan dari nilai penguasaan materi.
+Pastikan setiap soal hanya dinilai satu kali. Cegah klik ganda, pengiriman berulang, dan perubahan jawaban setelah dikunci.
+J. SISTEM LEVEL, PETA, REWARD, DAN PROGRES
+Buat peta petualangan dengan level yang terbuka bertahap. Setiap wilayah memuat beberapa misi dan monster penjaga.
+Setiap area memiliki rangkaian level sendiri, minimal satu monster reguler dan satu bos area; area dapat memiliki mini-bos jika sesuai.
+Simpan progres per area: level terbuka, monster yang telah dikalahkan, status bos, bintang/XP, dan indikator materi yang telah dikuasai.
+Peta harus memperlihatkan hubungan antararea dan jalur pembukaan area berikutnya. Sediakan opsi bagi guru untuk membuka semua area sekaligus atau menentukan jalur eksplorasi sendiri.
+•	Level memiliki nama, materi, indikator, prasyarat, jumlah soal, dan monster.
+•	Kemenangan memberikan XP, koin, bintang, badge, atau item kosmetik.
+•	XP digunakan untuk menaikkan level akun lokal; koin dapat membuka kostum/aksesori kosmetik.
+•	Jangan menjual atau mengunci akses materi pembelajaran penting di balik hadiah.
+•	Tampilkan progres level, materi yang telah diselesaikan, dan materi yang perlu latihan ulang.
+•	Sediakan mode latihan tanpa tekanan waktu dan mode tantangan jika guru mengaktifkannya.
+Hadiah harus mendorong motivasi, bukan menjadi pengganti pemahaman. Nilai akademik tetap dihitung terpisah dari XP dan koin.
+K. PANEL GURU / ADMIN
+Buat dashboard guru yang mudah digunakan dan terlindungi dari akses siswa pada perangkat/kelas yang mendukung autentikasi. Pada versi lokal, beri penjelasan bahwa perlindungan hanya sebatas perangkat dan bukan keamanan akun server.
+Fitur wajib:
+•	Membuat, mengedit, menghapus, menduplikasi, mencari, memfilter, dan mengelompokkan soal.
+•	Mengelola kelas, jenjang, materi, indikator, paket soal, dan tingkat kesulitan.
+•	Menentukan jumlah soal, waktu, skor, HP monster, jumlah kesempatan, bantuan, dan aturan permainan.
+•	Mengaktifkan mode Solo, Local Team Battle, atau Online Class Battle sesuai kemampuan teknis.
+•	Membuat sesi/kode kelas jika backend tersedia.
+•	Melihat hasil per siswa, per tim, per kelas, per materi, dan per indikator.
+•	Meninjau jawaban uraian dan memberi nilai manual berdasarkan rubrik.
+•	Mengunduh hasil dalam CSV/JSON dan mencetak laporan.
+•	Mengimpor/mengekspor bank soal dan membuat cadangan data.
+•	Meninjau status soal: tervalidasi, perlu ditinjau, atau hasil pengembangan AI.
+Sediakan konfirmasi sebelum menghapus data. Sediakan pencarian dan filter agar bank soal besar tetap mudah dikelola.
+L. IMPOR DOKUMEN DAN EDITOR BANK SOAL
+Guru dapat mengunggah dokumen bahan ajar atau soal. Jika lingkungan AI Studio menyediakan kemampuan membaca file, analisis dokumen dan buat pratinjau bank soal sebelum menyimpan.
+Alur impor:
+38.	Guru memilih file dan mengunggahnya.
+39.	Aplikasi/AI membaca dokumen dan menampilkan ringkasan materi yang terdeteksi.
+40.	Tampilkan daftar soal yang diekstrak atau dikembangkan, beserta kunci, pembahasan, topik, dan sumber halaman jika tersedia.
+41.	Guru dapat mengedit, menyetujui, menolak, atau menandai soal yang meragukan.
+42.	Hanya soal yang disetujui/ditandai valid yang dimasukkan ke paket permainan.
+43.	Simpan bank soal dan sediakan ekspor sebagai cadangan.
+Jika AI tidak memiliki akses pemrosesan file pada saat aplikasi berjalan, jangan membuat tombol unggah palsu. Sediakan impor CSV/JSON yang formatnya dijelaskan, serta jelaskan bahwa ekstraksi otomatis dokumen memerlukan integrasi AI/backend.
+Sediakan template impor CSV/JSON dan validasi struktur sebelum data disimpan. Jangan menghapus bank soal lama saat impor gagal.
+M. DASHBOARD HASIL BELAJAR DAN LEADERBOARD
+Dashboard guru menampilkan:
+•	Nama siswa/tim, kelas, tanggal, mode, durasi, materi, jumlah soal.
+•	Jumlah benar, salah, belum dijawab, skor permainan, dan nilai akademik.
+•	Persentase ketepatan per topik/indikator.
+•	Daftar indikator yang telah dikuasai dan yang perlu penguatan.
+•	Riwayat percobaan dan perkembangan dari waktu ke waktu jika data tersedia.
+Leaderboard dapat difilter berdasarkan kelas, sesi, periode, dan mode. Tampilkan nama panggilan atau nama yang diizinkan guru. Sediakan opsi menyembunyikan peringkat publik agar tidak mempermalukan siswa.
+Jangan menyimpulkan penguasaan kompetensi hanya dari satu atau dua soal. Tampilkan jumlah bukti soal dan beri label hasil sebagai indikasi jika sampelnya terbatas.
+N. AUDIO, ANIMASI, DAN PENGATURAN
+Gunakan musik latar fantasi-petualangan yang orisinal atau legal. Efek suara antara lain: menu, langkah, serangan hero, serangan monster, jawaban benar/salah, naik level, hadiah, dan kemenangan.
+Sediakan pengaturan musik ON/OFF, efek suara ON/OFF, volume, kualitas animasi, dan pengurangan gerakan. Audio hanya dimulai setelah interaksi pengguna pertama. Pastikan game tetap dapat dimainkan tanpa audio.
+Gunakan animasi yang halus namun hemat performa. Hormati preferensi reduced motion jika tersedia.
+O. PRIVASI, PENYIMPANAN, DAN KEAMANAN
+•	Kumpulkan data siswa seminimal mungkin; gunakan nama panggilan atau identitas kelas yang diperlukan.
+•	Jangan meminta data sensitif yang tidak dibutuhkan untuk pembelajaran.
+•	Jelaskan data apa yang disimpan dan apakah penyimpanan lokal atau server.
+•	Sediakan opsi ekspor dan hapus data sesuai kewenangan guru.
+•	Validasi file impor, ukuran, format, dan isi data.
+•	Jangan mengeksekusi kode yang berasal dari dokumen atau file impor.
+•	Lindungi akses dashboard dan hasil siswa jika menggunakan backend.
+•	Jangan mengklaim data tersinkronisasi lintas perangkat bila hanya memakai LocalStorage.
+P. LAPORAN AKHIR PERMAINAN
+Setelah sesi selesai, tampilkan layar hasil yang memuat:
+•	Nama siswa/tim dan hero yang digunakan.
+•	Mata pelajaran, kelas, materi, dan level.
+•	Jumlah soal, benar, salah, dan tidak terjawab.
+•	Skor permainan, nilai akademik, XP, reward, dan durasi secara terpisah.
+•	Rincian jawaban dan pembahasan jika guru mengizinkan.
+•	Indikator yang kuat dan indikator yang perlu latihan.
+•	Peringkat sesi jika mode kompetitif diaktifkan.
+Sediakan tombol Main Lagi, Pilih Mode, Kembali ke Peta, Menu Utama, Cetak/Unduh Hasil. Simpan riwayat sesuai pengaturan penyimpanan.
+Q. KUALITAS, PENGUJIAN, DAN KRITERIA SELESAI
+Sebelum menyatakan game selesai, lakukan pemeriksaan fungsional dan perbaiki kesalahan.
+44.	Semua tombol dan navigasi berfungsi.
+45.	Hero dapat dipilih dan tampil benar.
+46.	Solo Adventure dapat dimainkan dari awal sampai hasil akhir.
+47.	Local Team Battle menjalankan giliran dan skor tiap tim secara benar.
+48.	Jika online battle diimplementasikan, uji sinkronisasi peserta dan penanganan koneksi.
+49.	Soal diambil dari bank soal yang dipilih guru.
+50.	Kunci dan perhitungan matematika telah diperiksa.
+51.	Soal tidak berulang dalam satu sesi jika bank soal mencukupi.
+52.	HP, serangan, skor, XP, reward, dan kondisi menang/kalah dihitung dengan benar.
+53.	Editor soal, impor, ekspor, dan validasi berjalan.
+54.	Dashboard dan laporan menampilkan data yang sesuai.
+55.	Tampilan responsif pada desktop dan ponsel.
+56.	Tidak ada tombol palsu, data contoh yang disamarkan sebagai data nyata, atau fitur yang hanya dekoratif.
+57.	Tidak ada error JavaScript yang menghalangi permainan.
+Sediakan data demo yang diberi label jelas agar game dapat dicoba sebelum guru memasukkan bank soal. Pastikan guru dapat menghapus atau mengganti data demo.
+R. OUTPUT AKHIR YANG DIMINTA
+Hasilkan implementasi game yang benar-benar dapat dimainkan, bukan hanya blueprint, wireframe, mockup, atau deskripsi.
+Prioritas output:
+58.	Aplikasi web lengkap dengan halaman menu, peta, arena battle, panel guru, dan laporan.
+59.	Mode Solo Adventure berfungsi penuh.
+60.	Mode Local Team Battle berfungsi penuh; online multiplayer hanya jika backend benar-benar tersedia.
+61.	Bank soal matematika dapat dibuat, diedit, diimpor, diekspor, dan digunakan dalam permainan.
+62.	Sistem hero, monster, HP, serangan, level, reward, dan progres berjalan.
+63.	Dashboard guru, laporan hasil belajar, dan leaderboard sesuai fitur yang benar-benar diimplementasikan.
+64.	Desain responsif, animasi, audio, dan aksesibilitas.
+65.	Petunjuk menjalankan aplikasi dan struktur file.
+66.	Jika ada fitur yang membutuhkan backend/API, jelaskan kebutuhan teknis dan jangan menyimulasikan seolah-olah sudah aktif.
+Jika platform hanya dapat menghasilkan satu file, buat index.html mandiri dengan CSS dan JavaScript di dalamnya. Jika lebih baik menggunakan beberapa file, berikan seluruh file yang diperlukan dan instruksi menjalankan.
+Jangan berhenti setelah membuat rancangan. Implementasikan fitur inti terlebih dahulu, jalankan pemeriksaan, lalu lanjutkan fitur tambahan. Jika keluaran harus dibagi beberapa tahap, nyatakan file dan bagian yang telah selesai serta lanjutkan dari titik terakhir tanpa menghilangkan spesifikasi.
+S. INSTRUKSI TERAKHIR UNTUK AI
+BANGUN BATTLE OF KNOWLEDGE — MATH MONSTER ADVENTURE SEBAGAI GAME EDUKASI YANG BENAR-BENAR DAPAT DIMAINKAN. UTAMAKAN AKURASI SOAL MATEMATIKA, PENGALAMAN BELAJAR YANG MENYENANGKAN, KONTROL GURU, DAN FUNGSI YANG TERUJI. JANGAN MENGKLAIM FITUR BERFUNGSI JIKA BELUM DIIMPLEMENTASIKAN.
+
+Mulailah dengan memeriksa lampiran dan kemampuan lingkungan. Setelah itu, buat aplikasi lengkap, tampilkan hasil implementasi, dan berikan instruksi singkat untuk menjalankannya.
+
+ LAMPIRAN — SARAN PENGGUNAAN DI GEMINI / GOOGLE AI STUDIO
+1. Tempelkan seluruh MASTER PROMPT ini sebagai instruksi utama.
+2. Lampirkan dokumen kisi-kisi, soal, modul, atau materi matematika yang ingin dijadikan sumber bank soal.
+3. Tambahkan informasi kelas/jenjang dan batasan materi jika belum tercantum pada dokumen.
+4. Minta AI membuat aplikasi dan menguji alur permainan. Jika memakai Google AI Studio, pastikan mode/build environment yang dipilih mendukung pembuatan aplikasi web dan file.
+5. Untuk fitur online antarsiswa, siapkan backend/database dan autentikasi. File HTML lokal saja tidak cukup untuk sinkronisasi real-time lintas perangkat.
+6. Uji aplikasi dengan beberapa siswa sebelum digunakan untuk penilaian resmi.

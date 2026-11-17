@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Cinzel", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    font-size: 70%;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    font-family: var(--font-sans);
+  }
+}
+
+/* Accessibility modes */
+.a11y-large-text {
+  font-size: 112.5%;
+}
+
+.a11y-high-contrast {
+  --surface-panel: #030712;
+  --border-panel: #f8fafc;
+}
+
+.a11y-high-contrast .hc-surface {
+  background-color: #030712 !important;
+  border-color: #e2e8f0 !important;
+  color: #ffffff !important;
+}
+
+.a11y-high-contrast .hc-button {
+  border-width: 2px !important;
+  border-color: #fde047 !important;
+}
+
+@keyframes slowPan {
+  0% {
+    transform: scale(1.06) translate3d(-1%, -0.5%, 0);
+  }
+  50% {
+    transform: scale(1.1) translate3d(1%, 0.5%, 0);
+  }
+  100% {
+    transform: scale(1.06) translate3d(-1%, -0.5%, 0);
+  }
+}
+
+.animate-slow-pan {
+  animation: slowPan 28s ease-in-out infinite;
+}
+
+.reduced-motion .animate-slow-pan,
+.reduced-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slow-pan {
+    animation: none;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  html,
+  body,
+  #root {
+    font-size: 16px !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-sheet-overlay {
+    position: static !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  #printable-sheet {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+  .print-only-clean,
+  .print-only-clean * {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+  }
+}
