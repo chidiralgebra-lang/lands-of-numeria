@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ZoomIn, ZoomOut } from 'lucide-react';
 import { DEMO_QUESTION_BANK } from './data/defaultBank';
 import { DEFAULT_AREAS, DEFAULT_PROFILE, DEFAULT_SETTINGS, HEROES, MONSTERS } from './data/worldData';
@@ -33,6 +33,19 @@ import {
   saveQuestions,
   saveSettings,
 } from './utils/storage';
+import {
+  clearSiteAttemptsOnServer,
+  deleteSiteAttemptOnServer,
+  fetchSiteAttempts,
+  fetchSiteConfig,
+  flushPendingAttempts,
+  getPendingAttemptIds,
+  mergeServerSettings,
+  normalizeServerAreas,
+  publishSiteConfig,
+  pushSiteAttempt,
+  updateSiteAttemptOnServer,
+} from './utils/siteSync';
 import { BattleArenaScreen } from './components/BattleArenaScreen';
 import { ChampionCelebrationScreen } from './components/ChampionCelebrationScreen';
 import { HowToPlayModal, SettingsModal } from './components/InfoModals';
@@ -133,6 +146,157 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [displayScale, setDisplayScale] = useState<number>(70);
 
+  const [configSyncStatus, setConfigSyncStatus] = useState<
+    'checking' | 'synced' | 'syncing' | 'unsynced' | 'error'
+  >('checking');
+  const [configSyncError, setConfigSyncError] = useState('');
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [attemptsLoading, setAttemptsLoading] = useState(false);
+
+  const teacherDirtyRef = useRef(false);
+  const syncTimerRef = useRef<number | null>(null);
+  const latestConfigRef = useRef({ questions, areas, heroes, monsters, settings });
+  latestConfigRef.current = { questions, areas, heroes, monsters, settings };
+
+  const applyServerConfig = useCallback(async () => {
+    if (teacherDirtyRef.current) return;
+    const res = await fetchSiteConfig();
+    if (!res) {
+      setConfigSyncStatus((prev) => (prev === 'checking' ? 'unsynced' : prev));
+      return;
+    }
+    if (!res.hasConfig || !res.config) {
+      setConfigSyncStatus((prev) => (prev === 'checking' ? 'unsynced' : prev));
+      return;
+    }
+    if (teacherDirtyRef.current) return;
+
+    const cfg = res.config;
+    if (Array.isArray(cfg.questions) && cfg.questions.length > 0) {
+      setQuestions(cfg.questions);
+    } else if (Array.isArray(cfg.questions)) {
+      setQuestions(cfg.questions);
+    }
+    if (Array.isArray(cfg.areas) && cfg.areas.length > 0) {
+      const normalized = normalizeServerAreas(cfg.areas);
+      setAreas(normalized);
+      setFocusedAreaId((prev) =>
+        normalized.some((a) => a.id === prev) ? prev : getFrontierAreaId(normalized, profile, settings)
+      );
+    }
+    if (Array.isArray(cfg.heroes) && cfg.heroes.length > 0) {
+      setHeroes(cfg.heroes);
+    }
+    if (cfg.monsters && typeof cfg.monsters === 'object') {
+      setMonsters(cfg.monsters);
+    }
+    if (cfg.settings && typeof cfg.settings === 'object') {
+      setSettings((prev) => mergeServerSettings(prev, cfg.settings));
+    }
+    setLastSyncedAt(cfg.updatedAt || null);
+    setConfigSyncStatus('synced');
+    setConfigSyncError('');
+  }, []);
+
+  const refreshServerAttempts = useCallback(async () => {
+    setAttemptsLoading(true);
+    try {
+      const serverList = await fetchSiteAttempts();
+      if (!serverList) return;
+      const pendingIds = getPendingAttemptIds();
+      setAttempts((prevLocal) => {
+        const map = new Map<string, AttemptRecord>();
+        serverList.forEach((a) => map.set(a.id, a));
+        prevLocal.forEach((a) => {
+          if (pendingIds.has(a.id) && !map.has(a.id)) {
+            map.set(a.id, a);
+          }
+        });
+        return Array.from(map.values()).sort((a, b) => {
+          const ta = Date.parse(a.dateIso || '') || 0;
+          const tb = Date.parse(b.dateIso || '') || 0;
+          return tb - ta;
+        });
+      });
+    } finally {
+      setAttemptsLoading(false);
+    }
+  }, []);
+
+  const publishTeacherConfigNow = useCallback(
+    async (override?: Partial<typeof latestConfigRef.current>) => {
+      if (syncTimerRef.current !== null) {
+        window.clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
+      const payload = {
+        ...latestConfigRef.current,
+        ...override,
+      };
+      latestConfigRef.current = payload;
+      setConfigSyncStatus('syncing');
+      setConfigSyncError('');
+      try {
+        const res = await publishSiteConfig(payload);
+        teacherDirtyRef.current = false;
+        setLastSyncedAt(res.config?.updatedAt || new Date().toISOString());
+        setConfigSyncStatus('synced');
+      } catch (err) {
+        setConfigSyncStatus('error');
+        setConfigSyncError(
+          err instanceof Error ? err.message : 'Gagal menyimpan konfigurasi guru ke server.'
+        );
+      }
+    },
+    []
+  );
+
+  const scheduleTeacherPublish = useCallback(
+    (override?: Partial<typeof latestConfigRef.current>) => {
+      teacherDirtyRef.current = true;
+      if (override) {
+        latestConfigRef.current = { ...latestConfigRef.current, ...override };
+      }
+      setConfigSyncStatus('syncing');
+      setConfigSyncError('');
+      if (syncTimerRef.current !== null) {
+        window.clearTimeout(syncTimerRef.current);
+      }
+      syncTimerRef.current = window.setTimeout(() => {
+        syncTimerRef.current = null;
+        void publishTeacherConfigNow();
+      }, 450);
+    },
+    [publishTeacherConfigNow]
+  );
+
+  useEffect(() => {
+    void applyServerConfig();
+    void flushPendingAttempts();
+    const onOnline = () => {
+      void flushPendingAttempts();
+      void applyServerConfig();
+    };
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      if (syncTimerRef.current !== null) {
+        window.clearTimeout(syncTimerRef.current);
+      }
+    };
+  }, [applyServerConfig]);
+
+  useEffect(() => {
+    if (screen === 'WORLD_MAP' || screen === 'PLAYER_SETUP') {
+      void applyServerConfig();
+    } else if (screen === 'TEACHER_PANEL') {
+      if (!teacherDirtyRef.current) {
+        void applyServerConfig();
+      }
+      void refreshServerAttempts();
+    }
+  }, [screen, applyServerConfig, refreshServerAttempts]);
+
   useEffect(() => {
     document.documentElement.style.fontSize = `${displayScale}%`;
   }, [displayScale]);
@@ -226,6 +390,7 @@ export default function App() {
   } => {
     setLastResult(record);
     setAttempts((prev) => [record, ...prev]);
+    void pushSiteAttempt(record);
 
     if (record.mode !== 'solo') {
       setNextMissionTarget(null);
@@ -391,6 +556,7 @@ export default function App() {
     setActiveBattle(null);
     setNextMissionTarget(null);
     setMapTransitionFromAreaId(null);
+    void clearSiteAttemptsOnServer();
     if (alsoResetProfile) {
       setProfile(DEFAULT_PROFILE);
       const sorted = [...areas].sort((a, b) => a.order - b.order);
@@ -603,15 +769,53 @@ export default function App() {
           settings={settings}
           attempts={attempts}
           hasProfileProgress={hasProfileProgress}
-          onUpdateQuestions={setQuestions}
-          onUpdateAreas={setAreas}
-          onUpdateHeroes={setHeroes}
-          onUpdateMonsters={setMonsters}
+          configSyncStatus={configSyncStatus}
+          configSyncError={configSyncError}
+          lastSyncedAt={lastSyncedAt}
+          attemptsLoading={attemptsLoading}
+          onPublishConfigNow={() => {
+            void publishTeacherConfigNow();
+          }}
+          onRefreshAttempts={() => {
+            void refreshServerAttempts();
+          }}
+          onUpdateQuestions={(next) => {
+            setQuestions(next);
+            scheduleTeacherPublish({ questions: next });
+          }}
+          onUpdateAreas={(next) => {
+            setAreas(next);
+            scheduleTeacherPublish({ areas: next });
+          }}
+          onUpdateHeroes={(next) => {
+            setHeroes(next);
+            scheduleTeacherPublish({ heroes: next });
+          }}
+          onUpdateMonsters={(next) => {
+            setMonsters(next);
+            scheduleTeacherPublish({ monsters: next });
+          }}
           onSelectActiveHero={(heroId) => setProfile((p) => ({ ...p, heroId }))}
-          onUpdateSettings={setSettings}
+          onUpdateSettings={(next) => {
+            setSettings(next);
+            scheduleTeacherPublish({ settings: next });
+          }}
           onUpdateAttempts={setAttempts}
+          onSaveAttemptReview={(updated) => {
+            setAttempts((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+            void updateSiteAttemptOnServer(updated);
+          }}
+          onDeleteAttempt={(id) => {
+            setAttempts((prev) => prev.filter((item) => item.id !== id));
+            void deleteSiteAttemptOnServer(id);
+          }}
           onResetResults={handleResetGameResults}
-          onBack={() => setScreen('TITLE_MENU')}
+          onBack={() => {
+            if (teacherDirtyRef.current) {
+              void publishTeacherConfigNow();
+            }
+            setScreen('TITLE_MENU');
+          }}
         />
       )}
 

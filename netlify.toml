@@ -19,6 +19,24 @@
   force = true
 
 [[redirects]]
+  from = "/api/site-config"
+  to = "/.netlify/functions/site-config"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/site-attempts"
+  to = "/.netlify/functions/site-attempts"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/site-attempts/*"
+  to = "/.netlify/functions/site-attempts/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

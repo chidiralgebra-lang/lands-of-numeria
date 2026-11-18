@@ -234,10 +234,10 @@ export const SettingsModal: React.FC<{
             <span>PRIVASI & PENYIMPANAN DATA</span>
           </div>
           <p className="leading-relaxed">
-            Progres petualangan solo, bank soal kustom guru, dan riwayat nilai disimpan secara lokal di
-            browser perangkat ini (<span className="font-mono">LocalStorage</span>) dan tidak disinkronkan
-            otomatis ke perangkat lain. Sesi Kelas Daring menggunakan ruang sementara di server selama sesi
-            berlangsung.
+            Bank soal, pengaturan aturan guru, dan hasil permainan siswa pada mode{' '}
+            <strong>Mulai Bermain</strong>, <strong>Team Battle Lokal</strong>, serta{' '}
+            <strong>Kelas Daring</strong> disinkronkan dengan server hosting (termasuk Netlify) agar
+            tetap sama untuk seluruh siswa. Progres hero pribadi tetap tersimpan pada perangkat ini.
           </p>
 
           {!confirmReset ? (

@@ -471,7 +471,7 @@ export const BattleArenaScreen: React.FC<BattleArenaScreenProps> = ({
     const totalCoins = coinsEarned + (won ? level.rewardCoins : 10);
 
     return {
-      id: `att-${Date.now()}`,
+      id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       studentName:
         mode === 'local_team' && teamConfig
           ? `${teamConfig.teamAName} vs ${teamConfig.teamBName}`

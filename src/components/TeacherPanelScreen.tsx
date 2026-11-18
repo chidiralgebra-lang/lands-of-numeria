@@ -3,13 +3,17 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  Cloud,
+  CloudOff,
   Copy,
   Download,
   GraduationCap,
+  Loader2,
   Lock,
   Pencil,
   Plus,
   Printer,
+  RefreshCw,
   RotateCcw,
   Search,
   Trash2,
@@ -49,6 +53,12 @@ interface TeacherPanelScreenProps {
   settings: GameSettings;
   attempts: AttemptRecord[];
   hasProfileProgress?: boolean;
+  configSyncStatus?: 'checking' | 'synced' | 'syncing' | 'unsynced' | 'error';
+  configSyncError?: string;
+  lastSyncedAt?: string | null;
+  attemptsLoading?: boolean;
+  onPublishConfigNow?: () => void;
+  onRefreshAttempts?: () => void;
   onUpdateQuestions: (next: Question[]) => void;
   onUpdateAreas: (next: AreaDef[]) => void;
   onUpdateHeroes?: (next: HeroDef[]) => void;
@@ -56,6 +66,8 @@ interface TeacherPanelScreenProps {
   onSelectActiveHero?: (heroId: HeroId) => void;
   onUpdateSettings: (next: GameSettings) => void;
   onUpdateAttempts: (next: AttemptRecord[]) => void;
+  onSaveAttemptReview?: (updated: AttemptRecord) => void;
+  onDeleteAttempt?: (id: string) => void;
   onResetResults: (alsoResetProfile: boolean) => void;
   onBack: () => void;
 }
@@ -71,6 +83,12 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   settings,
   attempts,
   hasProfileProgress = false,
+  configSyncStatus = 'unsynced',
+  configSyncError = '',
+  lastSyncedAt = null,
+  attemptsLoading = false,
+  onPublishConfigNow,
+  onRefreshAttempts,
   onUpdateQuestions,
   onUpdateAreas,
   onUpdateHeroes,
@@ -78,6 +96,8 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   onSelectActiveHero,
   onUpdateSettings,
   onUpdateAttempts,
+  onSaveAttemptReview,
+  onDeleteAttempt,
   onResetResults,
   onBack,
 }) => {
@@ -85,6 +105,12 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   const [unlocked, setUnlocked] = useState(!settings.teacherPin);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
+
+  useEffect(() => {
+    if (!settings.teacherPin) {
+      setUnlocked(true);
+    }
+  }, [settings.teacherPin]);
 
   const [tab, setTab] = useState<TeacherTab>('bank');
   const [searchQuery, setSearchQuery] = useState('');
@@ -415,6 +441,15 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   };
 
   useEffect(() => {
+    if (!unlocked || tab !== 'laporan' || !onRefreshAttempts) return;
+    onRefreshAttempts();
+    const poll = window.setInterval(() => {
+      onRefreshAttempts();
+    }, 8000);
+    return () => window.clearInterval(poll);
+  }, [unlocked, tab, onRefreshAttempts]);
+
+  useEffect(() => {
     if (!activeRoom || activeRoom.status === 'ENDED' || tab !== 'kelas') return;
     const poll = window.setInterval(async () => {
       try {
@@ -503,6 +538,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   };
 
   const handleSaveEssayScore = (attemptId: string, qIdx: number, scorePct: number, note: string) => {
+    let updatedTarget: AttemptRecord | null = null;
     const next = attempts.map((att) => {
       if (att.id !== attemptId) return att;
       const updatedLogs = att.questionLogs.map((l, idx) =>
@@ -518,14 +554,19 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
       );
       const correctCount = updatedLogs.filter((l) => l.isCorrect).length;
       const mastery = Math.round((correctCount / Math.max(1, updatedLogs.length)) * 100);
-      return {
+      updatedTarget = {
         ...att,
         questionLogs: updatedLogs,
         correctCount,
         academicMasteryPct: mastery,
       };
+      return updatedTarget;
     });
-    onUpdateAttempts(next);
+    if (updatedTarget && onSaveAttemptReview) {
+      onSaveAttemptReview(updatedTarget);
+    } else {
+      onUpdateAttempts(next);
+    }
   };
 
   const downloadFile = (filename: string, content: string, mime: string) => {
@@ -635,6 +676,70 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
           ))}
         </div>
       </header>
+
+      {/* Server / Netlify Persistence Status Bar */}
+      <div className="px-5 py-2.5 bg-slate-900/75 border-b border-slate-800/90 no-print">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 text-slate-300">
+            {configSyncStatus === 'syncing' || configSyncStatus === 'checking' ? (
+              <>
+                <Loader2 className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
+                <span>
+                  {configSyncStatus === 'checking'
+                    ? 'Memeriksa sinkronisasi bank soal & pengaturan server...'
+                    : 'Menyimpan perubahan ke link hosting...'}
+                </span>
+              </>
+            ) : configSyncStatus === 'synced' ? (
+              <>
+                <Cloud className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>
+                  <strong className="text-emerald-300">Tersinkron ke Link Hosting:</strong> Bank soal,
+                  wilayah, dan aturan yang Anda buat akan tetap berlaku saat siswa atau guru lain membuka
+                  link ini.
+                  {lastSyncedAt && (
+                    <span className="text-slate-400 ml-1.5">
+                      (Terakhir disimpan:{' '}
+                      {new Date(lastSyncedAt).toLocaleTimeString('id-ID', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                      )
+                    </span>
+                  )}
+                </span>
+              </>
+            ) : configSyncStatus === 'error' ? (
+              <>
+                <CloudOff className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="text-rose-200">
+                  {configSyncError || 'Gagal menyinkronkan ke server.'}
+                </span>
+              </>
+            ) : (
+              <>
+                <Cloud className="w-4 h-4 text-sky-400 shrink-0" />
+                <span>
+                  Perubahan pada Panel Guru otomatis disimpan ke server hosting. Klik tombol di samping
+                  jika ingin langsung mempublikasikan setelan saat ini ke link Anda.
+                </span>
+              </>
+            )}
+          </div>
+
+          {onPublishConfigNow && (
+            <button
+              type="button"
+              disabled={configSyncStatus === 'syncing'}
+              onClick={onPublishConfigNow}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 disabled:opacity-50 text-emerald-200 font-semibold cursor-pointer"
+            >
+              <Cloud className="w-3.5 h-3.5" />
+              <span>Simpan & Publikasikan ke Link</span>
+            </button>
+          )}
+        </div>
+      </div>
 
       <main className={`flex-1 p-4 md:p-6 max-w-6xl w-full mx-auto space-y-6 overflow-y-auto ${printSheet ? 'no-print' : ''}`}>
         {/* ================= TAB 1: BANK SOAL ================= */}
@@ -1307,10 +1412,26 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
         {tab === 'laporan' && (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3 no-print">
-              <h2 className="font-bold text-lg text-white">
-                Dashboard Hasil Belajar ({filteredAttempts.length} / {attempts.length} Riwayat Sesi)
-              </h2>
+              <div>
+                <h2 className="font-bold text-lg text-white">
+                  Dashboard Hasil Belajar ({filteredAttempts.length} / {attempts.length} Riwayat Sesi)
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Menampilkan hasil siswa yang bermain melalui menu Mulai Bermain maupun Team Battle Lokal pada link ini.
+                </p>
+              </div>
               <div className="flex flex-wrap gap-2">
+                {onRefreshAttempts && (
+                  <button
+                    type="button"
+                    disabled={attemptsLoading}
+                    onClick={onRefreshAttempts}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 disabled:opacity-60 text-sky-200 text-xs font-semibold cursor-pointer"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${attemptsLoading ? 'animate-spin' : ''}`} />
+                    <span>{attemptsLoading ? 'Menyegarkan...' : 'Segarkan Hasil Siswa'}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={filteredAttempts.length === 0}
@@ -1566,7 +1687,11 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    onUpdateAttempts(attempts.filter((item) => item.id !== att.id));
+                                    if (onDeleteAttempt) {
+                                      onDeleteAttempt(att.id);
+                                    } else {
+                                      onUpdateAttempts(attempts.filter((item) => item.id !== att.id));
+                                    }
                                     if (gradingAttemptId === att.id) setGradingAttemptId(null);
                                   }}
                                   className="inline-flex items-center gap-1 text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
