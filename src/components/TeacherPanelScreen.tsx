@@ -10,6 +10,8 @@ import {
   GraduationCap,
   Loader2,
   Lock,
+  LogIn,
+  LogOut,
   Pencil,
   Plus,
   Printer,
@@ -21,6 +23,7 @@ import {
   Upload,
   Users,
 } from 'lucide-react';
+import type { User } from 'firebase/auth';
 import { AREA_BG_IMAGES, HEROES, MONSTERS } from '../data/worldData';
 import {
   AreaDef,
@@ -36,6 +39,12 @@ import {
 } from '../types/game';
 import { generateCsvTemplate, parseQuestionsFromCsv } from '../utils/mathEvaluator';
 import { getApiUrl } from '../utils/api';
+import {
+  createFirestoreClassroom,
+  endFirestoreClassroom,
+  startFirestoreClassroom,
+  subscribeFirestoreRoomTeacher,
+} from '../utils/firebaseSync';
 import { HeroMonsterEditorTab } from './HeroMonsterEditorTab';
 import { PrintableReportSheet } from './PrintableReportSheet';
 import {
@@ -53,6 +62,12 @@ interface TeacherPanelScreenProps {
   settings: GameSettings;
   attempts: AttemptRecord[];
   hasProfileProgress?: boolean;
+  firebaseUser?: User | null;
+  isTeacherAdmin?: boolean;
+  authLoading?: boolean;
+  authError?: string;
+  onSignInGoogle?: () => void;
+  onSignOutGoogle?: () => void;
   configSyncStatus?: 'checking' | 'synced' | 'syncing' | 'unsynced' | 'error';
   configSyncError?: string;
   lastSyncedAt?: string | null;
@@ -83,6 +98,12 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   settings,
   attempts,
   hasProfileProgress = false,
+  firebaseUser = null,
+  isTeacherAdmin = false,
+  authLoading = false,
+  authError = '',
+  onSignInGoogle,
+  onSignOutGoogle,
   configSyncStatus = 'unsynced',
   configSyncError = '',
   lastSyncedAt = null,
@@ -128,7 +149,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   // Area Creator & Editor State
   const [newAreaName, setNewAreaName] = useState('');
   const [newAreaTopic, setNewAreaTopic] = useState('');
-  const [newAreaGrade, setNewAreaGrade] = useState('Kelas 7');
+  const [newAreaGrade, setNewAreaGrade] = useState('SMA/SMK Kelas X');
   const [newAreaDesc, setNewAreaDesc] = useState('');
   const [newAreaBg, setNewAreaBg] = useState<string>(AREA_BG_IMAGES.castle);
   const [newAreaMonster, setNewAreaMonster] = useState('penjaga_sudut');
@@ -142,6 +163,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   const [roomTopic, setRoomTopic] = useState('ALL');
   const [roomQCount, setRoomQCount] = useState(5);
   const [activeRoom, setActiveRoom] = useState<OnlineRoomSummary | null>(null);
+  const [roomUsingCloud, setRoomUsingCloud] = useState(false);
   const [roomError, setRoomError] = useState('');
   const [roomLoading, setRoomLoading] = useState(false);
 
@@ -173,7 +195,9 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   const uniqueTopics = useMemo(() => {
     const set = new Set(questions.map((q) => q.topic));
     areas.forEach((a) => {
-      if (a.mathTopic !== 'Campuran & Pengayaan') set.add(a.mathTopic);
+      if (a.mathTopic !== 'Campuran & Pengayaan' && a.mathTopic !== 'Campuran & Pengayaan HOTS') {
+        set.add(a.mathTopic);
+      }
     });
     return Array.from(set);
   }, [questions, areas]);
@@ -263,7 +287,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
       id: editingQuestion?.id || `guru-${Date.now()}`,
       subject: 'Matematika',
       gradeLevel: String(fd.get('gradeLevel') || 'Umum'),
-      topic: String(fd.get('topic') || 'Operasi Hitung & Bilangan'),
+      topic: String(fd.get('topic') || 'Eksponen, Akar & Logaritma'),
       subtopic: String(fd.get('subtopic') || 'Umum'),
       indicator: String(fd.get('indicator') || 'Indikator Pembelajaran'),
       sourceDoc: String(fd.get('sourceDoc') || 'Input Guru'),
@@ -398,7 +422,8 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
       if (
         syncLevelTopics &&
         (lvl.topicFilter === editAreaOldTopic || lvl.topicFilter === '') &&
-        cleanTopic !== 'Campuran & Pengayaan'
+        cleanTopic !== 'Campuran & Pengayaan' &&
+        cleanTopic !== 'Campuran & Pengayaan HOTS'
       ) {
         return { ...lvl, topicFilter: cleanTopic };
       }
@@ -450,7 +475,17 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   }, [unlocked, tab, onRefreshAttempts]);
 
   useEffect(() => {
-    if (!activeRoom || activeRoom.status === 'ENDED' || tab !== 'kelas') return;
+    if (!activeRoom || tab !== 'kelas') return;
+    if (roomUsingCloud) {
+      const unsub = subscribeFirestoreRoomTeacher(
+        activeRoom.code,
+        (updated) => setActiveRoom(updated),
+        (err) =>
+          setRoomError(err instanceof Error ? err.message : 'Gagal memantau sesi kelas cloud.')
+      );
+      return () => unsub();
+    }
+    if (activeRoom.status === 'ENDED') return;
     const poll = window.setInterval(async () => {
       try {
         const res = await fetch(getApiUrl(`/api/rooms/${activeRoom.code}`));
@@ -463,7 +498,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
       }
     }, 2500);
     return () => window.clearInterval(poll);
-  }, [activeRoom?.code, activeRoom?.status, tab]);
+  }, [activeRoom?.code, activeRoom?.status, tab, roomUsingCloud]);
 
   const handleCreateOnlineRoom = async () => {
     const pool = questions.filter((q) => roomTopic === 'ALL' || q.topic === roomTopic);
@@ -474,6 +509,26 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
     setRoomLoading(true);
     setRoomError('');
     try {
+      if (firebaseUser && isTeacherAdmin) {
+        const created = await createFirestoreClassroom(
+          {
+            title: roomTitle,
+            areaName: roomTopic === 'ALL' ? 'Semua Topik' : roomTopic,
+            topicFilter: roomTopic,
+            difficulty: 'campuran',
+            questionCount: Math.min(roomQCount, pool.length),
+            durationPerQuestionSec: settings.secondsPerQuestion,
+            allowHints: settings.allowHints,
+            showPublicLeaderboard: settings.showPublicLeaderboard,
+            questionPool: pool,
+          },
+          firebaseUser
+        );
+        setRoomUsingCloud(true);
+        setActiveRoom(created);
+        return;
+      }
+
       const res = await fetch(getApiUrl('/api/rooms'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -491,7 +546,10 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
       });
       const data = await parseApiJson<OnlineRoomSummary>(res);
       if (!res.ok) setRoomError(data.error || 'Gagal membuat sesi kelas.');
-      else setActiveRoom(data);
+      else {
+        setRoomUsingCloud(false);
+        setActiveRoom(data);
+      }
     } catch (err) {
       setRoomError(
         err instanceof Error ? err.message : 'Server tidak merespons saat membuat ruang kelas.'
@@ -502,7 +560,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   };
 
   const handleRefreshRoom = async () => {
-    if (!activeRoom) return;
+    if (!activeRoom || roomUsingCloud) return;
     try {
       const res = await fetch(getApiUrl(`/api/rooms/${activeRoom.code}`));
       const data = await parseApiJson<OnlineRoomSummary>(res);
@@ -516,6 +574,10 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   const handleStartRoom = async () => {
     if (!activeRoom) return;
     try {
+      if (roomUsingCloud) {
+        await startFirestoreClassroom(activeRoom.code);
+        return;
+      }
       const res = await fetch(getApiUrl(`/api/rooms/${activeRoom.code}/start`), { method: 'POST' });
       const data = await parseApiJson<OnlineRoomSummary>(res);
       if (res.ok) setActiveRoom(data);
@@ -528,6 +590,10 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   const handleEndRoom = async () => {
     if (!activeRoom) return;
     try {
+      if (roomUsingCloud) {
+        await endFirestoreClassroom(activeRoom.code);
+        return;
+      }
       const res = await fetch(getApiUrl(`/api/rooms/${activeRoom.code}/end`), { method: 'POST' });
       const data = await parseApiJson<OnlineRoomSummary>(res);
       if (res.ok) setActiveRoom(data);
@@ -677,26 +743,44 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
         </div>
       </header>
 
-      {/* Server / Netlify Persistence Status Bar */}
+      {/* Server / Firebase Cloud Persistence Status Bar */}
       <div className="px-5 py-2.5 bg-slate-900/75 border-b border-slate-800/90 no-print">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 text-slate-300">
-            {configSyncStatus === 'syncing' || configSyncStatus === 'checking' ? (
+            {!firebaseUser ? (
+              <>
+                <CloudOff className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  <strong className="text-amber-300">Belum Masuk Akun Google Guru:</strong> Masuk dengan
+                  akun Google Anda agar bank soal, wilayah, dan aturan Panel Guru tersimpan di Firebase Cloud
+                  dan otomatis tampil untuk semua siswa di perangkat mana pun.
+                </span>
+              </>
+            ) : !isTeacherAdmin ? (
+              <>
+                <CloudOff className="w-4 h-4 text-sky-400 shrink-0" />
+                <span>
+                  Masuk sebagai <strong className="text-white">{firebaseUser.email}</strong>. Perubahan
+                  lokal tidak menimpa setelan utama guru; hanya akun Google Guru Pemilik yang dapat
+                  mempublikasikan ke cloud untuk semua siswa.
+                </span>
+              </>
+            ) : configSyncStatus === 'syncing' || configSyncStatus === 'checking' ? (
               <>
                 <Loader2 className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
                 <span>
                   {configSyncStatus === 'checking'
-                    ? 'Memeriksa sinkronisasi bank soal & pengaturan server...'
-                    : 'Menyimpan perubahan ke link hosting...'}
+                    ? 'Memeriksa sinkronisasi bank soal & pengaturan cloud...'
+                    : 'Menyimpan perubahan ke Firebase Cloud...'}
                 </span>
               </>
             ) : configSyncStatus === 'synced' ? (
               <>
                 <Cloud className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>
-                  <strong className="text-emerald-300">Tersinkron ke Link Hosting:</strong> Bank soal,
-                  wilayah, dan aturan yang Anda buat akan tetap berlaku saat siswa atau guru lain membuka
-                  link ini.
+                  <strong className="text-emerald-300">Tersinkron Cloud ({firebaseUser.email}):</strong>{' '}
+                  Bank soal, wilayah, dan aturan yang Anda buat otomatis aktif saat siswa membuka link ini
+                  dengan akun Google mereka.
                   {lastSyncedAt && (
                     <span className="text-slate-400 ml-1.5">
                       (Terakhir disimpan:{' '}
@@ -713,32 +797,63 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
               <>
                 <CloudOff className="w-4 h-4 text-rose-400 shrink-0" />
                 <span className="text-rose-200">
-                  {configSyncError || 'Gagal menyinkronkan ke server.'}
+                  {configSyncError || 'Gagal menyinkronkan ke cloud.'}
                 </span>
               </>
             ) : (
               <>
                 <Cloud className="w-4 h-4 text-sky-400 shrink-0" />
                 <span>
-                  Perubahan pada Panel Guru otomatis disimpan ke server hosting. Klik tombol di samping
-                  jika ingin langsung mempublikasikan setelan saat ini ke link Anda.
+                  Terhubung sebagai Guru ({firebaseUser.email}). Klik tombol di kanan untuk mempublikasikan
+                  bank soal &amp; pengaturan saat ini ke semua perangkat siswa.
                 </span>
               </>
             )}
           </div>
 
-          {onPublishConfigNow && (
-            <button
-              type="button"
-              disabled={configSyncStatus === 'syncing'}
-              onClick={onPublishConfigNow}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 disabled:opacity-50 text-emerald-200 font-semibold cursor-pointer"
-            >
-              <Cloud className="w-3.5 h-3.5" />
-              <span>Simpan & Publikasikan ke Link</span>
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {!firebaseUser && onSignInGoogle ? (
+              <button
+                type="button"
+                disabled={authLoading}
+                onClick={onSignInGoogle}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-bold cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>{authLoading ? 'Menghubungkan...' : 'Masuk Akun Google Guru'}</span>
+              </button>
+            ) : (
+              <>
+                {isTeacherAdmin && onPublishConfigNow && (
+                  <button
+                    type="button"
+                    disabled={configSyncStatus === 'syncing'}
+                    onClick={onPublishConfigNow}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 disabled:opacity-50 text-emerald-200 font-semibold cursor-pointer"
+                  >
+                    <Cloud className="w-3.5 h-3.5" />
+                    <span>Simpan &amp; Publikasikan ke Cloud</span>
+                  </button>
+                )}
+                {onSignOutGoogle && (
+                  <button
+                    type="button"
+                    onClick={onSignOutGoogle}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Ganti Akun</span>
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
+        {authError && (
+          <div className="max-w-6xl mx-auto mt-2 p-2.5 rounded-lg bg-rose-950/70 border border-rose-500/40 text-xs text-rose-200">
+            {authError}
+          </div>
+        )}
       </div>
 
       <main className={`flex-1 p-4 md:p-6 max-w-6xl w-full mx-auto space-y-6 overflow-y-auto ${printSheet ? 'no-print' : ''}`}>
@@ -1050,6 +1165,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
                 const count = questions.filter(
                   (q) =>
                     area.mathTopic === 'Campuran & Pengayaan' ||
+                    area.mathTopic === 'Campuran & Pengayaan HOTS' ||
                     q.topic.toLowerCase() === area.mathTopic.toLowerCase()
                 ).length;
 
@@ -1817,7 +1933,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
                   name="topic"
                   required
                   list="topic-suggestions"
-                  defaultValue={editingQuestion?.topic || 'Operasi Hitung & Bilangan'}
+                  defaultValue={editingQuestion?.topic || 'Eksponen, Akar & Logaritma'}
                   className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white"
                 />
               </div>
@@ -1863,7 +1979,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
                 <label className="block text-slate-300 mb-1">Jenjang / Sumber</label>
                 <input
                   name="gradeLevel"
-                  defaultValue={editingQuestion?.gradeLevel || 'SMP Kelas 7'}
+                  defaultValue={editingQuestion?.gradeLevel || 'SMA/SMK Kelas X'}
                   className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white"
                 />
               </div>

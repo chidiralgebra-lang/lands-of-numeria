@@ -2,8 +2,11 @@ import React, { useEffect, useState } from 'react';
 import {
   ArrowRight,
   BookOpen,
+  Cloud,
   Coins,
   GraduationCap,
+  LogIn,
+  LogOut,
   Play,
   RotateCcw,
   Settings,
@@ -15,6 +18,7 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
+import type { User } from 'firebase/auth';
 import { DEFAULT_PROFILE, HEROES, TITLE_BACKDROP_IMG } from '../data/worldData';
 import { HeroDef, HeroId, PlayerProfile } from '../types/game';
 import { HeroPortraitSvg, TitleCrestSvg } from './CharacterSvg';
@@ -24,6 +28,14 @@ interface TitleScreenProps {
   heroes?: HeroDef[];
   musicOrSfxEnabled: boolean;
   externalModalOpen?: boolean;
+  firebaseUser?: User | null;
+  authLoading?: boolean;
+  authError?: string;
+  isTeacherAdmin?: boolean;
+  configSyncStatus?: 'checking' | 'synced' | 'syncing' | 'unsynced' | 'error';
+  onSignInGoogle?: () => void;
+  onSignOutGoogle?: () => void;
+  onClearAuthError?: () => void;
   onToggleMute: () => void;
   onContinueAdventure: () => void;
   onStartNewAdventure: () => void;
@@ -40,6 +52,14 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   heroes = HEROES,
   musicOrSfxEnabled,
   externalModalOpen = false,
+  firebaseUser = null,
+  authLoading = false,
+  authError = '',
+  isTeacherAdmin = false,
+  configSyncStatus = 'unsynced',
+  onSignInGoogle,
+  onSignOutGoogle,
+  onClearAuthError,
   onToggleMute,
   onContinueAdventure,
   onStartNewAdventure,
@@ -108,7 +128,46 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {firebaseUser ? (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/85 border border-emerald-500/40 text-xs text-slate-100">
+              <Cloud className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="max-w-[11rem] truncate font-medium">
+                {firebaseUser.email || firebaseUser.displayName || 'Akun Google'}
+              </span>
+              <span
+                className={`px-1.5 py-0.5 rounded text-[0.625rem] font-bold ${
+                  isTeacherAdmin
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'bg-sky-500/20 text-sky-300'
+                }`}
+              >
+                {isTeacherAdmin ? 'Guru' : 'Siswa'}
+              </span>
+              {onSignOutGoogle && (
+                <button
+                  type="button"
+                  onClick={onSignOutGoogle}
+                  title="Keluar / Ganti Akun Google"
+                  className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          ) : (
+            onSignInGoogle && (
+              <button
+                type="button"
+                disabled={authLoading}
+                onClick={onSignInGoogle}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/50 text-sm font-semibold text-sky-100 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <LogIn className="w-4 h-4 text-sky-300" />
+                <span>{authLoading ? 'Menghubungkan...' : 'Masuk Google'}</span>
+              </button>
+            )
+          )}
           <button
             type="button"
             onClick={onOpenHowToPlay}
@@ -188,13 +247,57 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               <span>Panel Guru</span>
             </button>
           </div>
+
+          {authError && (
+            <div className="max-w-xl p-3 rounded-xl bg-rose-950/85 border border-rose-500/50 text-xs text-rose-100 flex items-start justify-between gap-3">
+              <span>{authError}</span>
+              {onClearAuthError && (
+                <button
+                  type="button"
+                  onClick={onClearAuthError}
+                  className="text-rose-300 hover:text-white shrink-0 cursor-pointer"
+                  aria-label="Tutup peringatan"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {!firebaseUser && onSignInGoogle ? (
+            <div className="max-w-xl p-3.5 rounded-xl bg-slate-900/85 border border-sky-500/35 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs text-slate-200 leading-relaxed flex-1 min-w-[14rem]">
+                <strong className="text-sky-300">Sinkronisasi Cloud &amp; Akun Google:</strong> Masuk dengan
+                akun Google untuk memuat bank soal serta pengaturan Panel Guru terbaru dan mengirim nilai ke
+                guru.
+              </div>
+              <button
+                type="button"
+                disabled={authLoading}
+                onClick={onSignInGoogle}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>{authLoading ? 'Menghubungkan...' : 'Masuk dengan Google'}</span>
+              </button>
+            </div>
+          ) : firebaseUser ? (
+            <div className="max-w-xl flex items-center gap-2 text-xs text-emerald-300/95">
+              <Cloud className="w-4 h-4 shrink-0" />
+              <span>
+                {configSyncStatus === 'synced'
+                  ? `Tersinkron cloud (${firebaseUser.email}) · Bank soal & pengaturan guru aktif.`
+                  : `Terhubung sebagai ${firebaseUser.email}.`}
+              </span>
+            </div>
+          ) : null}
         </div>
       </main>
 
       {/* Single flat control-hint footer line */}
       <footer className="relative z-10 px-6 py-3 md:px-12 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 bg-slate-950/70 border-t border-slate-800/70">
-        <span>Enter / Spasi Mulai · 1–4 Pilih Jawaban · Esc Jeda · Mouse & Layar Sentuh Didukung</span>
-        <span>Penyimpanan lokal perangkat + dukungan sesi kelas daring</span>
+        <span>Enter / Spasi Mulai · 1–4 Pilih Jawaban · Esc Jeda · Mouse &amp; Layar Sentuh Didukung</span>
+        <span>Sinkronisasi Cloud Akun Google + dukungan sesi kelas daring</span>
       </footer>
 
       {/* Start Adventure Choice Modal */}

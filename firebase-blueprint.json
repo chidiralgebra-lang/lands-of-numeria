@@ -1,0 +1,460 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account profile isolated by owner UID and admin access.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 200
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "enum": ["student", "teacher"],
+          "maxLength": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "GameConfig": {
+      "title": "GameConfig",
+      "description": "Published teacher configuration (question bank, areas, heroes, monsters, and non-sensitive game rules) synchronized across devices and Google accounts.",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "description": "Monotonically increasing config version."
+        },
+        "updatedAt": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 40
+        },
+        "serverUpdatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedByUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "questions": {
+          "type": "array",
+          "description": "Published list of Question objects (max 500 items)."
+        },
+        "areas": {
+          "type": "array",
+          "description": "Published list of AreaDef objects (1..50 items)."
+        },
+        "heroes": {
+          "type": "array",
+          "description": "Published list of HeroDef objects (1..20 items)."
+        },
+        "monsters": {
+          "type": "object",
+          "description": "Published map of MonsterDef keyed by monster ID."
+        },
+        "settings": {
+          "type": "object",
+          "description": "Published non-sensitive GameSettings object (teacherPin excluded)."
+        }
+      },
+      "required": [
+        "version",
+        "updatedAt",
+        "serverUpdatedAt",
+        "updatedByUid",
+        "questions",
+        "areas",
+        "heroes",
+        "monsters",
+        "settings"
+      ]
+    },
+    "TeacherPrivate": {
+      "title": "TeacherPrivate",
+      "description": "Private teacher-only settings such as the device PIN, isolated from student reads.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "teacherPin": {
+          "type": "string",
+          "maxLength": 8
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerUid", "teacherPin", "updatedAt"]
+    },
+    "AttemptRecord": {
+      "title": "AttemptRecord",
+      "description": "Student solo, local team, or online class battle attempt result and indicator mastery logs.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "studentName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "className": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["solo", "local_team", "online_class"],
+          "maxLength": 20
+        },
+        "areaId": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "areaName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "levelId": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "levelName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "heroId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "dateIso": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 40
+        },
+        "durationSec": {
+          "type": "number"
+        },
+        "totalQuestions": {
+          "type": "integer"
+        },
+        "correctCount": {
+          "type": "integer"
+        },
+        "wrongCount": {
+          "type": "integer"
+        },
+        "unansweredCount": {
+          "type": "integer"
+        },
+        "gameScore": {
+          "type": "number"
+        },
+        "academicMasteryPct": {
+          "type": "number"
+        },
+        "xpEarned": {
+          "type": "number"
+        },
+        "coinsEarned": {
+          "type": "number"
+        },
+        "wonBattle": {
+          "type": "boolean"
+        },
+        "indicatorStats": {
+          "type": "array"
+        },
+        "questionLogs": {
+          "type": "array"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ownerUid",
+        "studentName",
+        "className",
+        "mode",
+        "areaId",
+        "areaName",
+        "levelId",
+        "levelName",
+        "heroId",
+        "dateIso",
+        "durationSec",
+        "totalQuestions",
+        "correctCount",
+        "wrongCount",
+        "unansweredCount",
+        "gameScore",
+        "academicMasteryPct",
+        "xpEarned",
+        "coinsEarned",
+        "wonBattle",
+        "indicatorStats",
+        "questionLogs",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ClassRoom": {
+      "title": "ClassRoom",
+      "description": "Teacher-hosted online multiplayer classroom session.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 12,
+          "pattern": "^[A-Z0-9]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "areaName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "topicFilter": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "difficulty": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "questionCount": {
+          "type": "integer"
+        },
+        "durationPerQuestionSec": {
+          "type": "integer"
+        },
+        "allowHints": {
+          "type": "boolean"
+        },
+        "showPublicLeaderboard": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["LOBBY", "ACTIVE", "ENDED"],
+          "maxLength": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 40
+        },
+        "startedAtMs": {
+          "type": "number"
+        },
+        "questionPool": {
+          "type": "array"
+        },
+        "serverCreatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "code",
+        "ownerUid",
+        "title",
+        "areaName",
+        "topicFilter",
+        "difficulty",
+        "questionCount",
+        "durationPerQuestionSec",
+        "allowHints",
+        "showPublicLeaderboard",
+        "status",
+        "createdAt",
+        "questionPool",
+        "serverCreatedAt",
+        "updatedAt"
+      ]
+    },
+    "RoomParticipant": {
+      "title": "RoomParticipant",
+      "description": "Participant state in an online classroom session.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "heroId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "score": {
+          "type": "number"
+        },
+        "correctCount": {
+          "type": "integer"
+        },
+        "answeredCount": {
+          "type": "integer"
+        },
+        "answeredIds": {
+          "type": "array"
+        },
+        "assignedQuestionIds": {
+          "type": "array"
+        },
+        "joinedOrder": {
+          "type": "integer"
+        },
+        "connected": {
+          "type": "boolean"
+        },
+        "roomPublic": {
+          "type": "boolean"
+        },
+        "joinedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ownerUid",
+        "name",
+        "heroId",
+        "score",
+        "correctCount",
+        "answeredCount",
+        "answeredIds",
+        "assignedQuestionIds",
+        "joinedOrder",
+        "connected",
+        "roomPublic",
+        "joinedAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Private user profile per authenticated Google account."
+    },
+    "/gameConfig/{configId}": {
+      "schema": {
+        "$ref": "#/entities/GameConfig"
+      },
+      "description": "Published global teacher game configuration at document ID 'global'."
+    },
+    "/teacherPrivate/{userId}": {
+      "schema": {
+        "$ref": "#/entities/TeacherPrivate"
+      },
+      "description": "Private teacher-only configuration such as local teacherPin."
+    },
+    "/attempts/{attemptId}": {
+      "schema": {
+        "$ref": "#/entities/AttemptRecord"
+      },
+      "description": "Student solo, local team, and online class battle attempt logs."
+    },
+    "/classRooms/{roomCode}": {
+      "schema": {
+        "$ref": "#/entities/ClassRoom"
+      },
+      "description": "Online classroom sessions created by the teacher."
+    },
+    "/classRooms/{roomCode}/participants/{participantId}": {
+      "schema": {
+        "$ref": "#/entities/RoomParticipant"
+      },
+      "description": "Students participating in an online classroom session."
+    }
+  }
+}

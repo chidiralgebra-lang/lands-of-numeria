@@ -30,6 +30,8 @@ const KEYS = {
 const MIGRATION_KEYS = {
   TANTANGAN_BANK_V1: 'bok_mma_tantangan_migrated_v1',
   DIMENSI_DIFF_V1: 'bok_mma_dimensi_diff_migrated_v1',
+  SMA_X_BANK_V1: 'bok_mma_sma_x_bank_v1',
+  SMA_X_AREAS_V1: 'bok_mma_sma_x_areas_v1',
 };
 
 function safeRead<T>(key: string, fallback: T): T {
@@ -54,17 +56,13 @@ export function loadQuestions(): Question[] {
   const saved = safeRead<Question[] | null>(KEYS.QUESTIONS, null);
   if (saved && Array.isArray(saved) && saved.length > 0) {
     try {
-      if (localStorage.getItem(MIGRATION_KEYS.TANTANGAN_BANK_V1) !== '1') {
-        const existingIds = new Set(saved.map((q) => q.id));
-        const newChallengeQuestions = DEMO_QUESTION_BANK.filter(
-          (q) => q.id.startsWith('demo-tantangan-') && !existingIds.has(q.id)
-        );
+      if (localStorage.getItem(MIGRATION_KEYS.SMA_X_BANK_V1) !== '1') {
+        localStorage.setItem(MIGRATION_KEYS.SMA_X_BANK_V1, '1');
         localStorage.setItem(MIGRATION_KEYS.TANTANGAN_BANK_V1, '1');
-        if (newChallengeQuestions.length > 0) {
-          const merged = [...saved, ...newChallengeQuestions];
-          safeWrite(KEYS.QUESTIONS, merged);
-          return merged;
-        }
+        const customQuestions = saved.filter((q) => !q.isDemo && !q.id.startsWith('demo-'));
+        const upgraded = [...customQuestions, ...DEMO_QUESTION_BANK];
+        safeWrite(KEYS.QUESTIONS, upgraded);
+        return upgraded;
       }
     } catch {
       // Ignore storage migration errors
@@ -85,29 +83,24 @@ export function loadAreas(): AreaDef[] {
       list.map((a) => ({ ...a, bgImage: resolveAreaBgImage(a.bgImage) }));
 
     try {
-      if (localStorage.getItem(MIGRATION_KEYS.DIMENSI_DIFF_V1) !== '1') {
+      if (localStorage.getItem(MIGRATION_KEYS.SMA_X_AREAS_V1) !== '1') {
+        localStorage.setItem(MIGRATION_KEYS.SMA_X_AREAS_V1, '1');
         localStorage.setItem(MIGRATION_KEYS.DIMENSI_DIFF_V1, '1');
-        let changed = false;
+        const defaultById = new Map(DEFAULT_AREAS.map((d) => [d.id, d]));
         const upgraded = saved.map((area) => {
-          if (area.id !== 'dimensi_tantangan') return area;
+          const defaultArea = defaultById.get(area.id);
+          if (!defaultArea || area.isCustom) return area;
           return {
             ...area,
-            mathTopic:
-              area.mathTopic === 'Campuran & Pengayaan' ? 'Campuran & Pengayaan HOTS' : area.mathTopic,
-            levels: area.levels.map((lvl) => {
-              if (lvl.id === 'dimensi_lv1' && lvl.difficulty === 'campuran') {
-                changed = true;
-                return { ...lvl, difficulty: 'sulit' as const };
-              }
-              return lvl;
-            }),
+            mathTopic: defaultArea.mathTopic,
+            description: defaultArea.description,
+            gradeRecommendation: defaultArea.gradeRecommendation,
+            levels: defaultArea.levels,
           };
         });
-        if (changed) {
-          const normalized = normalizeAreas(upgraded);
-          safeWrite(KEYS.AREAS, normalized);
-          return normalized;
-        }
+        const normalized = normalizeAreas(upgraded);
+        safeWrite(KEYS.AREAS, normalized);
+        return normalized;
       }
     } catch {
       // Ignore storage migration errors

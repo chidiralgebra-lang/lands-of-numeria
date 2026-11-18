@@ -122,7 +122,11 @@ export const PlayerSetupScreen: React.FC<PlayerSetupScreenProps> = ({
       teamAHero,
       teamBHero,
       areaId: chosenArea.id,
-      topicFilter: chosenArea.mathTopic === 'Campuran & Pengayaan' ? 'ALL' : chosenArea.mathTopic,
+      topicFilter:
+        chosenArea.mathTopic === 'Campuran & Pengayaan' ||
+        chosenArea.mathTopic === 'Campuran & Pengayaan HOTS'
+          ? 'ALL'
+          : chosenArea.mathTopic,
       questionCountPerTeam: 0,
       difficulty: teamDifficulty,
     });
@@ -187,7 +191,7 @@ export const PlayerSetupScreen: React.FC<PlayerSetupScreenProps> = ({
                     maxLength={24}
                     value={className}
                     onChange={(e) => setClassName(e.target.value)}
-                    placeholder="Contoh: Kelas 7A"
+                    placeholder="Contoh: Kelas X-A"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white focus:outline-none focus:border-amber-400"
                   />
                 </div>

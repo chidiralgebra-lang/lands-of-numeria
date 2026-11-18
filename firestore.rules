@@ -1,0 +1,561 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==================== GLOBAL PRIMITIVES ====================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidRoomCode(code) {
+      return code is string && code.size() >= 4 && code.size() <= 12 && code.matches('^[A-Z0-9]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    // Zero-DB-read bootstrapped admin check (safe in both single-doc rules and list rules)
+    function isAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'chidiralgebra@gmail.com';
+    }
+
+    // ==================== VALIDATION BLUEPRINTS ====================
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 200
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 100
+        && data.role is string
+        && data.role.size() >= 1
+        && data.role.size() <= 20
+        && data.role in ['student', 'teacher']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidGameConfig(data) {
+      return data.keys().hasAll([
+          'version',
+          'updatedAt',
+          'serverUpdatedAt',
+          'updatedByUid',
+          'questions',
+          'areas',
+          'heroes',
+          'monsters',
+          'settings'
+        ])
+        && data.keys().hasOnly([
+          'version',
+          'updatedAt',
+          'serverUpdatedAt',
+          'updatedByUid',
+          'questions',
+          'areas',
+          'heroes',
+          'monsters',
+          'settings'
+        ])
+        && data.version is int
+        && data.version >= 1
+        && data.updatedAt is string
+        && data.updatedAt.size() >= 10
+        && data.updatedAt.size() <= 40
+        && data.serverUpdatedAt is timestamp
+        && data.serverUpdatedAt == request.time
+        && isValidId(data.updatedByUid)
+        && data.updatedByUid == request.auth.uid
+        && data.questions is list
+        && data.questions.size() <= 500
+        && (data.questions.size() == 0 || data.questions[0] is map)
+        && data.areas is list
+        && data.areas.size() >= 1
+        && data.areas.size() <= 50
+        && data.areas[0] is map
+        && data.heroes is list
+        && data.heroes.size() >= 1
+        && data.heroes.size() <= 20
+        && data.heroes[0] is map
+        && data.monsters is map
+        && data.monsters.size() <= 100
+        && data.settings is map
+        && !('teacherPin' in data.settings);
+    }
+
+    function isValidTeacherPrivate(data, userId) {
+      return data.keys().hasAll(['ownerUid', 'teacherPin', 'updatedAt'])
+        && data.keys().hasOnly(['ownerUid', 'teacherPin', 'updatedAt'])
+        && isValidId(data.ownerUid)
+        && data.ownerUid == userId
+        && data.teacherPin is string
+        && data.teacherPin.size() <= 8
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidAttempt(data, attemptId) {
+      return data.keys().hasAll([
+          'id',
+          'ownerUid',
+          'studentName',
+          'className',
+          'mode',
+          'areaId',
+          'areaName',
+          'levelId',
+          'levelName',
+          'heroId',
+          'dateIso',
+          'durationSec',
+          'totalQuestions',
+          'correctCount',
+          'wrongCount',
+          'unansweredCount',
+          'gameScore',
+          'academicMasteryPct',
+          'xpEarned',
+          'coinsEarned',
+          'wonBattle',
+          'indicatorStats',
+          'questionLogs',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'ownerUid',
+          'studentName',
+          'className',
+          'mode',
+          'areaId',
+          'areaName',
+          'levelId',
+          'levelName',
+          'heroId',
+          'dateIso',
+          'durationSec',
+          'totalQuestions',
+          'correctCount',
+          'wrongCount',
+          'unansweredCount',
+          'gameScore',
+          'academicMasteryPct',
+          'xpEarned',
+          'coinsEarned',
+          'wonBattle',
+          'indicatorStats',
+          'questionLogs',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == attemptId
+        && isValidId(data.ownerUid)
+        && data.studentName is string
+        && data.studentName.size() >= 1
+        && data.studentName.size() <= 100
+        && data.className is string
+        && data.className.size() >= 1
+        && data.className.size() <= 80
+        && data.mode is string
+        && data.mode.size() <= 20
+        && data.mode in ['solo', 'local_team', 'online_class']
+        && data.areaId is string
+        && data.areaId.size() <= 100
+        && data.areaName is string
+        && data.areaName.size() >= 1
+        && data.areaName.size() <= 120
+        && data.levelId is string
+        && data.levelId.size() <= 100
+        && data.levelName is string
+        && data.levelName.size() >= 1
+        && data.levelName.size() <= 140
+        && data.heroId is string
+        && data.heroId.size() >= 1
+        && data.heroId.size() <= 60
+        && data.dateIso is string
+        && data.dateIso.size() >= 10
+        && data.dateIso.size() <= 40
+        && data.durationSec is number
+        && data.durationSec >= 0
+        && data.durationSec <= 86400
+        && data.totalQuestions is int
+        && data.totalQuestions >= 0
+        && data.totalQuestions <= 200
+        && data.correctCount is int
+        && data.correctCount >= 0
+        && data.correctCount <= 200
+        && data.wrongCount is int
+        && data.wrongCount >= 0
+        && data.wrongCount <= 200
+        && data.unansweredCount is int
+        && data.unansweredCount >= 0
+        && data.unansweredCount <= 200
+        && data.gameScore is number
+        && data.gameScore >= 0
+        && data.gameScore <= 1000000
+        && data.academicMasteryPct is number
+        && data.academicMasteryPct >= 0
+        && data.academicMasteryPct <= 100
+        && data.xpEarned is number
+        && data.xpEarned >= 0
+        && data.xpEarned <= 100000
+        && data.coinsEarned is number
+        && data.coinsEarned >= 0
+        && data.coinsEarned <= 100000
+        && data.wonBattle is bool
+        && data.indicatorStats is list
+        && data.indicatorStats.size() <= 100
+        && (data.indicatorStats.size() == 0 || data.indicatorStats[0] is map)
+        && data.questionLogs is list
+        && data.questionLogs.size() <= 200
+        && (data.questionLogs.size() == 0 || data.questionLogs[0] is map)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidClassRoom(data, roomCode) {
+      return data.keys().hasAll([
+          'code',
+          'ownerUid',
+          'title',
+          'areaName',
+          'topicFilter',
+          'difficulty',
+          'questionCount',
+          'durationPerQuestionSec',
+          'allowHints',
+          'showPublicLeaderboard',
+          'status',
+          'createdAt',
+          'startedAtMs',
+          'questionPool',
+          'serverCreatedAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'code',
+          'ownerUid',
+          'title',
+          'areaName',
+          'topicFilter',
+          'difficulty',
+          'questionCount',
+          'durationPerQuestionSec',
+          'allowHints',
+          'showPublicLeaderboard',
+          'status',
+          'createdAt',
+          'startedAtMs',
+          'questionPool',
+          'serverCreatedAt',
+          'updatedAt'
+        ])
+        && isValidRoomCode(data.code)
+        && data.code == roomCode
+        && isValidId(data.ownerUid)
+        && data.title is string
+        && data.title.size() >= 1
+        && data.title.size() <= 120
+        && data.areaName is string
+        && data.areaName.size() >= 1
+        && data.areaName.size() <= 120
+        && data.topicFilter is string
+        && data.topicFilter.size() >= 1
+        && data.topicFilter.size() <= 120
+        && data.difficulty is string
+        && data.difficulty.size() >= 1
+        && data.difficulty.size() <= 30
+        && data.questionCount is int
+        && data.questionCount >= 1
+        && data.questionCount <= 60
+        && data.durationPerQuestionSec is int
+        && data.durationPerQuestionSec >= 10
+        && data.durationPerQuestionSec <= 300
+        && data.allowHints is bool
+        && data.showPublicLeaderboard is bool
+        && data.status is string
+        && data.status.size() <= 20
+        && data.status in ['LOBBY', 'ACTIVE', 'ENDED']
+        && data.createdAt is string
+        && data.createdAt.size() >= 10
+        && data.createdAt.size() <= 40
+        && (data.startedAtMs == null || (data.startedAtMs is number && data.startedAtMs >= 0))
+        && data.questionPool is list
+        && data.questionPool.size() >= 1
+        && data.questionPool.size() <= 60
+        && data.questionPool[0] is map
+        && data.serverCreatedAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidParticipant(data, participantId) {
+      return data.keys().hasAll([
+          'id',
+          'ownerUid',
+          'name',
+          'heroId',
+          'score',
+          'correctCount',
+          'answeredCount',
+          'answeredIds',
+          'assignedQuestionIds',
+          'joinedOrder',
+          'connected',
+          'roomPublic',
+          'joinedAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'ownerUid',
+          'name',
+          'heroId',
+          'score',
+          'correctCount',
+          'answeredCount',
+          'answeredIds',
+          'assignedQuestionIds',
+          'joinedOrder',
+          'connected',
+          'roomPublic',
+          'joinedAt',
+          'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == participantId
+        && isValidId(data.ownerUid)
+        && data.name is string
+        && data.name.size() >= 1
+        && data.name.size() <= 32
+        && data.heroId is string
+        && data.heroId.size() >= 1
+        && data.heroId.size() <= 60
+        && data.score is number
+        && data.score >= 0
+        && data.score <= 100000
+        && data.correctCount is int
+        && data.correctCount >= 0
+        && data.correctCount <= 60
+        && data.answeredCount is int
+        && data.answeredCount >= 0
+        && data.answeredCount <= 60
+        && data.answeredIds is list
+        && data.answeredIds.size() <= 60
+        && (data.answeredIds.size() == 0 || data.answeredIds[0] is string)
+        && data.assignedQuestionIds is list
+        && data.assignedQuestionIds.size() <= 60
+        && (data.assignedQuestionIds.size() == 0 || data.assignedQuestionIds[0] is string)
+        && data.joinedOrder is int
+        && data.joinedOrder >= 0
+        && data.joinedOrder <= 500
+        && data.connected is bool
+        && data.roomPublic is bool
+        && data.joinedAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // ==================== COLLECTION RULES ====================
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == request.auth.uid
+        && incoming().email == request.auth.token.email
+        && (incoming().role == 'student' || isAdmin())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(userId)
+            && incoming().role == existing().role
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    match /gameConfig/{configId} {
+      allow get: if isValidId(configId) && configId == 'global' && isVerifiedUser();
+      allow list: if false;
+      allow create: if isValidId(configId)
+        && configId == 'global'
+        && isAdmin()
+        && isValidGameConfig(incoming());
+      allow update: if isValidId(configId)
+        && configId == 'global'
+        && isAdmin()
+        && isValidGameConfig(incoming())
+        && incoming().version >= existing().version
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'version',
+          'updatedAt',
+          'serverUpdatedAt',
+          'updatedByUid',
+          'questions',
+          'areas',
+          'heroes',
+          'monsters',
+          'settings'
+        ]);
+      allow delete: if isValidId(configId) && configId == 'global' && isAdmin();
+    }
+
+    match /teacherPrivate/{userId} {
+      allow get: if isValidId(userId) && isAdmin() && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isAdmin()
+        && isOwner(userId)
+        && isValidTeacherPrivate(incoming(), userId);
+      allow update: if isValidId(userId)
+        && isAdmin()
+        && isOwner(userId)
+        && isValidTeacherPrivate(incoming(), userId)
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['teacherPin', 'updatedAt']);
+      allow delete: if isValidId(userId) && isAdmin() && isOwner(userId);
+    }
+
+    match /attempts/{attemptId} {
+      allow get: if isValidId(attemptId)
+        && isVerifiedUser()
+        && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isVerifiedUser()
+        && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow create: if isValidId(attemptId)
+        && isVerifiedUser()
+        && isValidAttempt(incoming(), attemptId)
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(attemptId)
+        && isAdmin()
+        && isValidAttempt(incoming(), attemptId)
+        && incoming().id == existing().id
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'questionLogs',
+          'correctCount',
+          'academicMasteryPct',
+          'updatedAt'
+        ]);
+      allow delete: if isValidId(attemptId) && isAdmin();
+    }
+
+    match /classRooms/{roomCode} {
+      allow get: if isValidRoomCode(roomCode) && isVerifiedUser();
+      allow list: if isAdmin();
+      allow create: if isValidRoomCode(roomCode)
+        && isAdmin()
+        && isValidClassRoom(incoming(), roomCode)
+        && incoming().ownerUid == request.auth.uid
+        && incoming().status == 'LOBBY'
+        && incoming().serverCreatedAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidRoomCode(roomCode)
+        && isAdmin()
+        && isValidClassRoom(incoming(), roomCode)
+        && incoming().code == existing().code
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().serverCreatedAt == existing().serverCreatedAt
+        && incoming().updatedAt == request.time
+        && (existing().status != 'ENDED' || isAdmin())
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'status',
+          'startedAtMs',
+          'updatedAt'
+        ]);
+      allow delete: if isValidRoomCode(roomCode) && isAdmin();
+
+      match /participants/{participantId} {
+        allow get: if isValidRoomCode(roomCode)
+          && isValidId(participantId)
+          && isVerifiedUser()
+          && exists(/databases/$(database)/documents/classRooms/$(roomCode))
+          && (existing().ownerUid == request.auth.uid || existing().roomPublic == true || isAdmin());
+        allow list: if isVerifiedUser()
+          && (existing().ownerUid == request.auth.uid || existing().roomPublic == true || isAdmin());
+        allow create: if isValidRoomCode(roomCode)
+          && isValidId(participantId)
+          && isOwner(participantId)
+          && isValidParticipant(incoming(), participantId)
+          && incoming().ownerUid == request.auth.uid
+          && incoming().joinedAt == request.time
+          && incoming().updatedAt == request.time
+          && incoming().score == 0
+          && incoming().correctCount == 0
+          && incoming().answeredCount == 0
+          && exists(/databases/$(database)/documents/classRooms/$(roomCode))
+          && get(/databases/$(database)/documents/classRooms/$(roomCode)).data.status != 'ENDED'
+          && incoming().roomPublic == get(/databases/$(database)/documents/classRooms/$(roomCode)).data.showPublicLeaderboard;
+        allow update: if isValidRoomCode(roomCode)
+          && isValidId(participantId)
+          && isValidParticipant(incoming(), participantId)
+          && incoming().id == existing().id
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().joinedAt == existing().joinedAt
+          && incoming().updatedAt == request.time
+          && (
+            isAdmin() ||
+            (
+              isOwner(participantId)
+              && exists(/databases/$(database)/documents/classRooms/$(roomCode))
+              && get(/databases/$(database)/documents/classRooms/$(roomCode)).data.status == 'ACTIVE'
+              && incoming().score >= existing().score
+              && incoming().correctCount >= existing().correctCount
+              && incoming().answeredCount >= existing().answeredCount
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'score',
+                'correctCount',
+                'answeredCount',
+                'answeredIds',
+                'assignedQuestionIds',
+                'connected',
+                'updatedAt'
+              ])
+            )
+          );
+        allow delete: if isValidRoomCode(roomCode) && isValidId(participantId) && isAdmin();
+      }
+    }
+  }
+}

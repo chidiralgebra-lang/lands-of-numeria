@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import { ZoomIn, ZoomOut } from 'lucide-react';
 import { DEMO_QUESTION_BANK } from './data/defaultBank';
 import { DEFAULT_AREAS, DEFAULT_PROFILE, DEFAULT_SETTINGS, HEROES, MONSTERS } from './data/worldData';
+import { auth, isTeacherAdminUser, signInWithGoogle, signOutGoogle } from './firebase';
 import {
   AreaDef,
   AttemptRecord,
@@ -36,6 +38,7 @@ import {
 import {
   clearSiteAttemptsOnServer,
   deleteSiteAttemptOnServer,
+  enqueuePendingAttempt,
   fetchSiteAttempts,
   fetchSiteConfig,
   flushPendingAttempts,
@@ -44,8 +47,22 @@ import {
   normalizeServerAreas,
   publishSiteConfig,
   pushSiteAttempt,
+  removePendingAttempt,
   updateSiteAttemptOnServer,
 } from './utils/siteSync';
+import {
+  clearAllFirebaseAttempts,
+  deleteFirebaseAttempt,
+  ensureUserProfile,
+  fetchFirebaseAttempts,
+  fetchFirebaseConfig,
+  fetchTeacherPrivatePin,
+  publishFirebaseConfig,
+  pushFirebaseAttempt,
+  subscribeFirebaseAttempts,
+  subscribeFirebaseConfig,
+  updateFirebaseAttemptReview,
+} from './utils/firebaseSync';
 import { BattleArenaScreen } from './components/BattleArenaScreen';
 import { ChampionCelebrationScreen } from './components/ChampionCelebrationScreen';
 import { HowToPlayModal, SettingsModal } from './components/InfoModals';
@@ -146,6 +163,12 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [displayScale, setDisplayScale] = useState<number>(70);
 
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const isTeacherAdmin = isTeacherAdminUser(firebaseUser);
+
   const [configSyncStatus, setConfigSyncStatus] = useState<
     'checking' | 'synced' | 'syncing' | 'unsynced' | 'error'
   >('checking');
@@ -157,50 +180,159 @@ export default function App() {
   const syncTimerRef = useRef<number | null>(null);
   const latestConfigRef = useRef({ questions, areas, heroes, monsters, settings });
   latestConfigRef.current = { questions, areas, heroes, monsters, settings };
+  const firebaseUserRef = useRef<User | null>(null);
+  firebaseUserRef.current = firebaseUser;
+
+  const handleSignInGoogle = useCallback(async () => {
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      const code = (err as { code?: string })?.code || '';
+      if (code === 'auth/unauthorized-domain') {
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'domain-ini';
+        setAuthError(
+          `Domain "${host}" belum terdaftar di Firebase Authentication -> Settings -> Authorized domains. Tambahkan domain Netlify ini di Firebase Console agar Login Google berjalan.`
+        );
+      } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        setAuthError('Login Google dibatalkan. Silakan coba lagi untuk menyinkronkan cloud.');
+      } else {
+        setAuthError(
+          err instanceof Error ? err.message : 'Gagal masuk dengan akun Google. Coba lagi.'
+        );
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
+  const handleSignOutGoogle = useCallback(async () => {
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      await signOutGoogle();
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Gagal keluar dari akun Google.');
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
+  const applyConfigPayload = useCallback(
+    (cfg: {
+      updatedAt?: string;
+      questions?: Question[];
+      areas?: AreaDef[];
+      heroes?: HeroDef[];
+      monsters?: Record<string, MonsterDef>;
+      settings?: Partial<GameSettings>;
+    }) => {
+      if (Array.isArray(cfg.questions)) {
+        setQuestions(cfg.questions);
+      }
+      if (Array.isArray(cfg.areas) && cfg.areas.length > 0) {
+        const normalized = normalizeServerAreas(cfg.areas);
+        setAreas(normalized);
+        setFocusedAreaId((prev) =>
+          normalized.some((a) => a.id === prev)
+            ? prev
+            : getFrontierAreaId(normalized, profile, latestConfigRef.current.settings)
+        );
+      }
+      if (Array.isArray(cfg.heroes) && cfg.heroes.length > 0) {
+        setHeroes(cfg.heroes);
+      }
+      if (cfg.monsters && typeof cfg.monsters === 'object') {
+        setMonsters(cfg.monsters);
+      }
+      if (cfg.settings && typeof cfg.settings === 'object') {
+        setSettings((prev) => mergeServerSettings(prev, cfg.settings!));
+      }
+      setLastSyncedAt(cfg.updatedAt || null);
+      setConfigSyncStatus('synced');
+      setConfigSyncError('');
+    },
+    []
+  );
+
+  const flushPendingToCloud = useCallback(async (user: User | null) => {
+    if (!user || !user.emailVerified) {
+      await flushPendingAttempts();
+      return;
+    }
+    const pendingIds = Array.from(getPendingAttemptIds());
+    if (pendingIds.length === 0) return;
+    const localMap = new Map(loadAttempts().map((a) => [a.id, a]));
+    for (const id of pendingIds) {
+      const target = localMap.get(id);
+      if (!target) {
+        removePendingAttempt(id);
+        continue;
+      }
+      try {
+        await pushFirebaseAttempt(target, user);
+        removePendingAttempt(id);
+      } catch {
+        // Keep in pending queue for next retry
+      }
+    }
+  }, []);
 
   const applyServerConfig = useCallback(async () => {
     if (teacherDirtyRef.current) return;
-    const res = await fetchSiteConfig();
-    if (!res) {
-      setConfigSyncStatus((prev) => (prev === 'checking' ? 'unsynced' : prev));
-      return;
+    const currentUser = firebaseUserRef.current;
+    if (currentUser && currentUser.emailVerified) {
+      try {
+        const fbRes = await fetchFirebaseConfig();
+        if (teacherDirtyRef.current) return;
+        if (fbRes.hasConfig && fbRes.config) {
+          applyConfigPayload(fbRes.config);
+          return;
+        }
+        setConfigSyncStatus('unsynced');
+        return;
+      } catch (err) {
+        setConfigSyncStatus('error');
+        setConfigSyncError(
+          err instanceof Error ? err.message : 'Gagal membaca konfigurasi dari Firebase Cloud.'
+        );
+        return;
+      }
     }
-    if (!res.hasConfig || !res.config) {
+
+    const res = await fetchSiteConfig();
+    if (!res || !res.hasConfig || !res.config) {
       setConfigSyncStatus((prev) => (prev === 'checking' ? 'unsynced' : prev));
       return;
     }
     if (teacherDirtyRef.current) return;
-
-    const cfg = res.config;
-    if (Array.isArray(cfg.questions) && cfg.questions.length > 0) {
-      setQuestions(cfg.questions);
-    } else if (Array.isArray(cfg.questions)) {
-      setQuestions(cfg.questions);
-    }
-    if (Array.isArray(cfg.areas) && cfg.areas.length > 0) {
-      const normalized = normalizeServerAreas(cfg.areas);
-      setAreas(normalized);
-      setFocusedAreaId((prev) =>
-        normalized.some((a) => a.id === prev) ? prev : getFrontierAreaId(normalized, profile, settings)
-      );
-    }
-    if (Array.isArray(cfg.heroes) && cfg.heroes.length > 0) {
-      setHeroes(cfg.heroes);
-    }
-    if (cfg.monsters && typeof cfg.monsters === 'object') {
-      setMonsters(cfg.monsters);
-    }
-    if (cfg.settings && typeof cfg.settings === 'object') {
-      setSettings((prev) => mergeServerSettings(prev, cfg.settings));
-    }
-    setLastSyncedAt(cfg.updatedAt || null);
-    setConfigSyncStatus('synced');
-    setConfigSyncError('');
-  }, []);
+    applyConfigPayload(res.config);
+  }, [applyConfigPayload]);
 
   const refreshServerAttempts = useCallback(async () => {
     setAttemptsLoading(true);
     try {
+      const currentUser = firebaseUserRef.current;
+      if (currentUser && currentUser.emailVerified) {
+        await flushPendingToCloud(currentUser);
+        const cloudList = await fetchFirebaseAttempts(currentUser);
+        const pendingIds = getPendingAttemptIds();
+        setAttempts((prevLocal) => {
+          const map = new Map<string, AttemptRecord>();
+          cloudList.forEach((a) => map.set(a.id, a));
+          prevLocal.forEach((a) => {
+            if (pendingIds.has(a.id) && !map.has(a.id)) {
+              map.set(a.id, a);
+            }
+          });
+          return Array.from(map.values()).sort(
+            (a, b) => (Date.parse(b.dateIso || '') || 0) - (Date.parse(a.dateIso || '') || 0)
+          );
+        });
+        return;
+      }
+
       const serverList = await fetchSiteAttempts();
       if (!serverList) return;
       const pendingIds = getPendingAttemptIds();
@@ -218,10 +350,12 @@ export default function App() {
           return tb - ta;
         });
       });
+    } catch (err) {
+      setConfigSyncError(err instanceof Error ? err.message : 'Gagal menyegarkan data hasil siswa.');
     } finally {
       setAttemptsLoading(false);
     }
-  }, []);
+  }, [flushPendingToCloud]);
 
   const publishTeacherConfigNow = useCallback(
     async (override?: Partial<typeof latestConfigRef.current>) => {
@@ -236,6 +370,27 @@ export default function App() {
       latestConfigRef.current = payload;
       setConfigSyncStatus('syncing');
       setConfigSyncError('');
+
+      const currentUser = firebaseUserRef.current;
+      if (currentUser && isTeacherAdminUser(currentUser)) {
+        try {
+          const fbRes = await publishFirebaseConfig(payload, currentUser);
+          teacherDirtyRef.current = false;
+          setLastSyncedAt(fbRes.config?.updatedAt || new Date().toISOString());
+          setConfigSyncStatus('synced');
+          // Best-effort secondary mirror to Netlify/Express endpoint if active
+          void publishSiteConfig(payload).catch(() => undefined);
+        } catch (err) {
+          setConfigSyncStatus('error');
+          setConfigSyncError(
+            err instanceof Error
+              ? err.message
+              : 'Gagal menyimpan konfigurasi guru ke Firebase Cloud.'
+          );
+        }
+        return;
+      }
+
       try {
         const res = await publishSiteConfig(payload);
         teacherDirtyRef.current = false;
@@ -244,7 +399,11 @@ export default function App() {
       } catch (err) {
         setConfigSyncStatus('error');
         setConfigSyncError(
-          err instanceof Error ? err.message : 'Gagal menyimpan konfigurasi guru ke server.'
+          currentUser
+            ? 'Anda masuk bukan sebagai Guru Pemilik. Perubahan hanya tersimpan lokal di perangkat ini.'
+            : err instanceof Error
+            ? `${err.message} Masuk dengan Akun Google Guru agar konfigurasi tersimpan di Firebase Cloud.`
+            : 'Masuk dengan Akun Google Guru untuk mempublikasikan ke Firebase Cloud.'
         );
       }
     },
@@ -256,6 +415,13 @@ export default function App() {
       teacherDirtyRef.current = true;
       if (override) {
         latestConfigRef.current = { ...latestConfigRef.current, ...override };
+      }
+      const currentUser = firebaseUserRef.current;
+      if (currentUser && !isTeacherAdminUser(currentUser)) {
+        // Non-admin stays local without throwing cloud permission error
+        teacherDirtyRef.current = false;
+        setConfigSyncStatus('unsynced');
+        return;
       }
       setConfigSyncStatus('syncing');
       setConfigSyncError('');
@@ -270,11 +436,89 @@ export default function App() {
     [publishTeacherConfigNow]
   );
 
+  // Firebase Auth listener
   useEffect(() => {
-    void applyServerConfig();
-    void flushPendingAttempts();
-    const onOnline = () => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setAuthReady(true);
+      if (user && user.emailVerified) {
+        void ensureUserProfile(user).catch((err) => {
+          console.error('Profile sync failed:', err);
+        });
+        if (isTeacherAdminUser(user)) {
+          void fetchTeacherPrivatePin(user)
+            .then((pin) => {
+              if (pin !== null) {
+                setSettings((prev) => ({ ...prev, teacherPin: pin }));
+              }
+            })
+            .catch(() => undefined);
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Real-time Firebase Firestore listeners when authenticated & verified
+  useEffect(() => {
+    if (!authReady) return;
+    if (!firebaseUser || !firebaseUser.emailVerified) {
+      void applyServerConfig();
       void flushPendingAttempts();
+      return;
+    }
+
+    setConfigSyncStatus('checking');
+    void flushPendingToCloud(firebaseUser);
+
+    const unsubConfig = subscribeFirebaseConfig(
+      (res) => {
+        if (teacherDirtyRef.current) return;
+        if (res.hasConfig && res.config) {
+          applyConfigPayload(res.config);
+        } else {
+          setConfigSyncStatus('unsynced');
+        }
+      },
+      (err) => {
+        setConfigSyncStatus('error');
+        setConfigSyncError(
+          err instanceof Error ? err.message : 'Gagal menyinkronkan pengaturan dari Firebase Cloud.'
+        );
+      }
+    );
+
+    const unsubAttempts = subscribeFirebaseAttempts(
+      firebaseUser,
+      (cloudList) => {
+        const pendingIds = getPendingAttemptIds();
+        setAttempts((prevLocal) => {
+          const map = new Map<string, AttemptRecord>();
+          cloudList.forEach((a) => map.set(a.id, a));
+          prevLocal.forEach((a) => {
+            if (pendingIds.has(a.id) && !map.has(a.id)) {
+              map.set(a.id, a);
+            }
+          });
+          return Array.from(map.values()).sort(
+            (a, b) => (Date.parse(b.dateIso || '') || 0) - (Date.parse(a.dateIso || '') || 0)
+          );
+        });
+      },
+      (err) => {
+        console.error('Attempts subscription error:', err);
+      }
+    );
+
+    return () => {
+      unsubConfig();
+      unsubAttempts();
+    };
+  }, [authReady, firebaseUser, applyConfigPayload, applyServerConfig, flushPendingToCloud]);
+
+  useEffect(() => {
+    const onOnline = () => {
+      void flushPendingToCloud(firebaseUserRef.current);
       void applyServerConfig();
     };
     window.addEventListener('online', onOnline);
@@ -284,7 +528,7 @@ export default function App() {
         window.clearTimeout(syncTimerRef.current);
       }
     };
-  }, [applyServerConfig]);
+  }, [applyServerConfig, flushPendingToCloud]);
 
   useEffect(() => {
     if (screen === 'WORLD_MAP' || screen === 'PLAYER_SETUP') {
@@ -390,7 +634,14 @@ export default function App() {
   } => {
     setLastResult(record);
     setAttempts((prev) => [record, ...prev]);
-    void pushSiteAttempt(record);
+    const currentUser = firebaseUserRef.current;
+    if (currentUser && currentUser.emailVerified) {
+      void pushFirebaseAttempt(record, currentUser).catch(() => {
+        enqueuePendingAttempt(record);
+      });
+    } else {
+      void pushSiteAttempt(record);
+    }
 
     if (record.mode !== 'solo') {
       setNextMissionTarget(null);
@@ -556,6 +807,10 @@ export default function App() {
     setActiveBattle(null);
     setNextMissionTarget(null);
     setMapTransitionFromAreaId(null);
+    const currentUser = firebaseUserRef.current;
+    if (currentUser && isTeacherAdminUser(currentUser)) {
+      void clearAllFirebaseAttempts(currentUser).catch(() => undefined);
+    }
     void clearSiteAttemptsOnServer();
     if (alsoResetProfile) {
       setProfile(DEFAULT_PROFILE);
@@ -581,6 +836,14 @@ export default function App() {
           heroes={heroes}
           musicOrSfxEnabled={settings.musicEnabled || settings.sfxEnabled}
           externalModalOpen={showHowToPlay || showSettings}
+          firebaseUser={firebaseUser}
+          authLoading={authLoading}
+          authError={authError}
+          isTeacherAdmin={isTeacherAdmin}
+          configSyncStatus={configSyncStatus}
+          onSignInGoogle={() => void handleSignInGoogle()}
+          onSignOutGoogle={() => void handleSignOutGoogle()}
+          onClearAuthError={() => setAuthError('')}
           onToggleMute={handleToggleMute}
           onContinueAdventure={() => {
             soundEngine.playMenuClick();
@@ -755,6 +1018,9 @@ export default function App() {
           defaultName={profile.name}
           defaultHero={profile.heroId}
           heroes={heroes}
+          firebaseUser={firebaseUser}
+          authLoading={authLoading}
+          onSignInGoogle={() => void handleSignInGoogle()}
           onBack={() => setScreen('TITLE_MENU')}
         />
       )}
@@ -769,6 +1035,12 @@ export default function App() {
           settings={settings}
           attempts={attempts}
           hasProfileProgress={hasProfileProgress}
+          firebaseUser={firebaseUser}
+          isTeacherAdmin={isTeacherAdmin}
+          authLoading={authLoading}
+          authError={authError}
+          onSignInGoogle={() => void handleSignInGoogle()}
+          onSignOutGoogle={() => void handleSignOutGoogle()}
           configSyncStatus={configSyncStatus}
           configSyncError={configSyncError}
           lastSyncedAt={lastSyncedAt}
@@ -803,10 +1075,18 @@ export default function App() {
           onUpdateAttempts={setAttempts}
           onSaveAttemptReview={(updated) => {
             setAttempts((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+            const currentUser = firebaseUserRef.current;
+            if (currentUser && isTeacherAdminUser(currentUser)) {
+              void updateFirebaseAttemptReview(updated, currentUser).catch(() => undefined);
+            }
             void updateSiteAttemptOnServer(updated);
           }}
           onDeleteAttempt={(id) => {
             setAttempts((prev) => prev.filter((item) => item.id !== id));
+            const currentUser = firebaseUserRef.current;
+            if (currentUser && isTeacherAdminUser(currentUser)) {
+              void deleteFirebaseAttempt(id, currentUser).catch(() => undefined);
+            }
             void deleteSiteAttemptOnServer(id);
           }}
           onResetResults={handleResetGameResults}

@@ -4,21 +4,35 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  LogIn,
   Swords,
   Trophy,
   Users,
   XCircle,
 } from 'lucide-react';
+import type { User } from 'firebase/auth';
 import { HEROES } from '../data/worldData';
 import { HeroDef, HeroId, OnlineRoomSummary, Question } from '../types/game';
 import { soundEngine } from '../utils/audioEngine';
 import { getApiUrl } from '../utils/api';
+import {
+  FirestoreParticipantDoc,
+  FirestoreRoomDoc,
+  FirestoreRoomQuestion,
+  assignParallelQuestions,
+  joinFirestoreClassroom,
+  submitFirestoreRoomAnswer,
+  subscribeFirestoreRoomStudent,
+} from '../utils/firebaseSync';
 import { HeroPortraitSvg } from './CharacterSvg';
 
 interface OnlineClassScreenProps {
   defaultName: string;
   defaultHero: HeroId;
   heroes?: HeroDef[];
+  firebaseUser?: User | null;
+  authLoading?: boolean;
+  onSignInGoogle?: () => void;
   onBack: () => void;
 }
 
@@ -44,6 +58,9 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
   defaultName,
   defaultHero,
   heroes = HEROES,
+  firebaseUser = null,
+  authLoading = false,
+  onSignInGoogle,
   onBack,
 }) => {
   const [codeInput, setCodeInput] = useState('');
@@ -51,6 +68,9 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
   const [heroId, setHeroId] = useState<HeroId>(defaultHero);
   const [participantId, setParticipantId] = useState<string | null>(null);
   const [room, setRoom] = useState<RoomState | null>(null);
+  const [cloudRoomMeta, setCloudRoomMeta] = useState<FirestoreRoomDoc | null>(null);
+  const [cloudParticipant, setCloudParticipant] = useState<FirestoreParticipantDoc | null>(null);
+  const [usingCloudRoom, setUsingCloudRoom] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -86,6 +106,62 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
 
   useEffect(() => {
     if (!room?.code || !participantId) return;
+    if (usingCloudRoom && cloudRoomMeta) {
+      const unsub = subscribeFirestoreRoomStudent(
+        room.code,
+        participantId,
+        cloudRoomMeta.showPublicLeaderboard,
+        ({ room: nextMeta, me: nextMe, participants }) => {
+          setCloudRoomMeta(nextMeta);
+          if (nextMe) setCloudParticipant(nextMe);
+          const qIds =
+            nextMe?.assignedQuestionIds?.length
+              ? nextMe.assignedQuestionIds
+              : nextMeta.status === 'ACTIVE'
+              ? assignParallelQuestions(
+                  nextMeta.questionPool,
+                  nextMeta.questionCount,
+                  nextMe?.joinedOrder ?? 0
+                )
+              : [];
+          const myQuestions: SafeRoomQuestion[] = qIds
+            .map((qid) => nextMeta.questionPool.find((q) => q.id === qid))
+            .filter((q): q is FirestoreRoomQuestion => Boolean(q))
+            .map(({ correctAnswer: _c, acceptedAlternatives: _a, numericValue: _n, ...safeQ }) => safeQ);
+
+          setRoom({
+            code: nextMeta.code,
+            title: nextMeta.title,
+            areaName: nextMeta.areaName,
+            topicFilter: nextMeta.topicFilter,
+            difficulty: nextMeta.difficulty,
+            questionCount: nextMeta.questionCount,
+            durationPerQuestionSec: nextMeta.durationPerQuestionSec,
+            allowHints: nextMeta.allowHints,
+            showPublicLeaderboard: nextMeta.showPublicLeaderboard,
+            status: nextMeta.status,
+            createdAt: nextMeta.createdAt,
+            startedAtMs: nextMeta.startedAtMs,
+            serverTimeMs: Date.now(),
+            participants: participants.map((p) => ({
+              id: p.id,
+              name: p.name,
+              heroId: p.heroId,
+              score: p.score,
+              correctCount: p.correctCount,
+              answeredCount: p.answeredCount,
+              connected: p.connected,
+            })),
+            myQuestions,
+          });
+        },
+        (err) => {
+          setErrorMsg(err instanceof Error ? err.message : 'Gagal menyinkronkan ruang kelas cloud.');
+        }
+      );
+      return () => unsub();
+    }
+
     const evtSource = new EventSource(getApiUrl(`/api/rooms/${room.code}/stream`));
     evtSource.onmessage = () => {
       fetchRoomSnapshot(room.code, participantId);
@@ -104,7 +180,7 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
       window.clearInterval(poll);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [room?.code, participantId]);
+  }, [room?.code, participantId, usingCloudRoom, cloudRoomMeta?.showPublicLeaderboard]);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +192,52 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
     setLoading(true);
     setErrorMsg('');
     try {
+      if (firebaseUser && firebaseUser.emailVerified) {
+        const { room: cloudMeta, participant } = await joinFirestoreClassroom(
+          cleanCode,
+          nameInput.trim(),
+          heroId,
+          firebaseUser
+        );
+        setUsingCloudRoom(true);
+        setCloudRoomMeta(cloudMeta);
+        setCloudParticipant(participant);
+        setParticipantId(participant.id);
+        const myQuestions: SafeRoomQuestion[] = participant.assignedQuestionIds
+          .map((qid) => cloudMeta.questionPool.find((q) => q.id === qid))
+          .filter((q): q is FirestoreRoomQuestion => Boolean(q))
+          .map(({ correctAnswer: _c, acceptedAlternatives: _a, numericValue: _n, ...safeQ }) => safeQ);
+        setRoom({
+          code: cloudMeta.code,
+          title: cloudMeta.title,
+          areaName: cloudMeta.areaName,
+          topicFilter: cloudMeta.topicFilter,
+          difficulty: cloudMeta.difficulty,
+          questionCount: cloudMeta.questionCount,
+          durationPerQuestionSec: cloudMeta.durationPerQuestionSec,
+          allowHints: cloudMeta.allowHints,
+          showPublicLeaderboard: cloudMeta.showPublicLeaderboard,
+          status: cloudMeta.status,
+          createdAt: cloudMeta.createdAt,
+          startedAtMs: cloudMeta.startedAtMs,
+          serverTimeMs: Date.now(),
+          participants: [
+            {
+              id: participant.id,
+              name: participant.name,
+              heroId: participant.heroId,
+              score: participant.score,
+              correctCount: participant.correctCount,
+              answeredCount: participant.answeredCount,
+              connected: participant.connected,
+            },
+          ],
+          myQuestions,
+        });
+        soundEngine.playMenuClick();
+        return;
+      }
+
       const res = await fetch(getApiUrl(`/api/rooms/${cleanCode}/join`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,6 +247,7 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
       if (!res.ok) {
         setErrorMsg(data.error || 'Gagal bergabung ke kelas.');
       } else {
+        setUsingCloudRoom(false);
         setParticipantId(data.participantId);
         setRoom(data.room);
         soundEngine.playMenuClick();
@@ -147,6 +270,30 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
     setSubmitting(true);
     setErrorMsg('');
     try {
+      if (usingCloudRoom && cloudRoomMeta && cloudParticipant) {
+        const targetQuestion = cloudRoomMeta.questionPool.find(
+          (q) => q.id === currentQuestion.id
+        );
+        if (!targetQuestion) {
+          throw new Error('Soal tidak ditemukan dalam paket kelas.');
+        }
+        const result = await submitFirestoreRoomAnswer(
+          room.code,
+          cloudParticipant,
+          targetQuestion,
+          trimmed
+        );
+        setCloudParticipant(result.updatedParticipant);
+        if (result.isCorrect) soundEngine.playCorrect();
+        else soundEngine.playWrong();
+        setAnswerFeedback({
+          isCorrect: result.isCorrect,
+          correctAnswer: result.correctAnswer,
+          explanation: result.explanation,
+        });
+        return;
+      }
+
       const res = await fetch(getApiUrl(`/api/rooms/${room.code}/answer`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -215,6 +362,23 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
                 paket soal paralel.
               </p>
             </div>
+
+            {!firebaseUser && onSignInGoogle && (
+              <div className="p-3.5 rounded-xl bg-sky-950/50 border border-sky-500/40 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <span className="text-sky-100 flex-1 min-w-[12rem]">
+                  Masuk dengan akun Google Anda agar dapat bergabung ke sesi kelas dari perangkat mana pun.
+                </span>
+                <button
+                  type="button"
+                  disabled={authLoading}
+                  onClick={onSignInGoogle}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold cursor-pointer disabled:opacity-50"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>{authLoading ? 'Menghubungkan...' : 'Masuk Google'}</span>
+                </button>
+              </div>
+            )}
 
             {errorMsg && (
               <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/50 text-xs text-rose-200">
