@@ -146,8 +146,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
           <TitleCrestSvg className="w-full max-w-[35rem] h-auto" />
 
           <p className="text-base md:text-lg text-slate-200 leading-relaxed max-w-xl">
-            Pilih pahlawanmu, jelajahi 5+ wilayah matematika dari Hutan Bilangan hingga Menara Logika,
-            dan taklukkan monster dengan kekuatan berpikir logis.
+            Pilih pahlawanmu, jelajahi Pulau Numeria, taklukan monster penguasa wilayah, taklukan raja
+            matematika dan jadilah penguasa Numeria.
           </p>
 
           {/* Primary & Secondary Actions */}

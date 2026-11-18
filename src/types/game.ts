@@ -3,6 +3,7 @@ export type ScreenState =
   | 'PLAYER_SETUP'
   | 'WORLD_MAP'
   | 'BATTLE_ARENA'
+  | 'CHAMPION_CELEBRATION'
   | 'RESULTS'
   | 'TEACHER_PANEL'
   | 'JOIN_CLASS';

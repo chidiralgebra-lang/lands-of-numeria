@@ -987,7 +987,9 @@ export const BattleArenaScreen: React.FC<BattleArenaScreenProps> = ({
                         <Play className="w-4 h-4 fill-slate-950" />
                         <span>
                           {monsterHp <= 0
-                            ? 'Monster Kalah! Membuka Laporan Hasil...'
+                            ? isChallengeStage
+                              ? 'Monster Terakhir Kalah! Menuju Penobatan...'
+                              : 'Monster Kalah! Membuka Laporan Hasil...'
                             : (mode === 'solo' && heroHp <= 0) ||
                               (mode === 'local_team' && teamAHp <= 0 && teamBHp <= 0)
                             ? 'Lihat Hasil Pertarungan'

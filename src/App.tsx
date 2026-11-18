@@ -34,6 +34,7 @@ import {
   saveSettings,
 } from './utils/storage';
 import { BattleArenaScreen } from './components/BattleArenaScreen';
+import { ChampionCelebrationScreen } from './components/ChampionCelebrationScreen';
 import { HowToPlayModal, SettingsModal } from './components/InfoModals';
 import { OnlineClassScreen } from './components/OnlineClassScreen';
 import { PlayerSetupScreen } from './components/PlayerSetupScreen';
@@ -219,13 +220,16 @@ export default function App() {
 
   const recordBattleCompletion = (
     record: AttemptRecord
-  ): { area: AreaDef; level: LevelDef; isNewArea: boolean } | null => {
+  ): {
+    nextTarget: { area: AreaDef; level: LevelDef; isNewArea: boolean } | null;
+    isGrandChampion: boolean;
+  } => {
     setLastResult(record);
     setAttempts((prev) => [record, ...prev]);
 
     if (record.mode !== 'solo') {
       setNextMissionTarget(null);
-      return null;
+      return { nextTarget: null, isGrandChampion: false };
     }
 
     const nextXp = profile.xp + record.xpEarned;
@@ -254,6 +258,21 @@ export default function App() {
     };
 
     const sortedAreas = [...areas].sort((a, b) => a.order - b.order);
+    const areasWithLevels = sortedAreas.filter((a) => a.levels.length > 0);
+    const finalArea = areasWithLevels[areasWithLevels.length - 1];
+    const finalLevel = finalArea?.levels[finalArea.levels.length - 1];
+    const isFinalMonsterVictory = Boolean(
+      record.wonBattle &&
+        finalArea &&
+        finalLevel &&
+        record.areaId === finalArea.id &&
+        record.levelId === finalLevel.id
+    );
+    const allLevelsWon =
+      areasWithLevels.length > 0 &&
+      areasWithLevels.every((a) => a.levels.every((l) => Boolean(nextCompleted[l.id])));
+    const isGrandChampion = isFinalMonsterVictory && allLevelsWon;
+
     const areaIdx = sortedAreas.findIndex((a) => a.id === record.areaId);
     const currentArea = sortedAreas[areaIdx];
     const isAreaBoss =
@@ -273,6 +292,11 @@ export default function App() {
       unlockedAreaIds = [...unlockedAreaIds, nextTarget.area.id];
     }
 
+    const nextBadges =
+      isGrandChampion && !profile.badges.includes('Penguasa Numeria')
+        ? [...profile.badges, 'Penguasa Numeria']
+        : profile.badges;
+
     if (nextLevel > profile.level) soundEngine.playLevelUp();
 
     setProfile({
@@ -280,6 +304,7 @@ export default function App() {
       xp: nextXp,
       level: nextLevel,
       coins: profile.coins + record.coinsEarned,
+      badges: nextBadges,
       completedLevels: nextCompleted,
       unlockedAreaIds,
     });
@@ -294,20 +319,28 @@ export default function App() {
       setFocusedAreaId(nextTarget.area.id);
     }
 
-    return nextTarget;
+    return { nextTarget, isGrandChampion };
   };
 
   const handleFinishBattle = (record: AttemptRecord) => {
-    recordBattleCompletion(record);
-    setScreen('RESULTS');
+    const { isGrandChampion } = recordBattleCompletion(record);
+    if (isGrandChampion) {
+      soundEngine.playLevelUp();
+      setScreen('CHAMPION_CELEBRATION');
+    } else {
+      setScreen('RESULTS');
+    }
   };
 
   const handleContinueNextFromBattle = (record: AttemptRecord) => {
-    const nextTarget = recordBattleCompletion(record);
+    const { nextTarget, isGrandChampion } = recordBattleCompletion(record);
     if (nextTarget) {
       soundEngine.playMenuClick();
       setActiveBattle({ mode: 'solo', area: nextTarget.area, level: nextTarget.level });
       setScreen('BATTLE_ARENA');
+    } else if (isGrandChampion) {
+      soundEngine.playLevelUp();
+      setScreen('CHAMPION_CELEBRATION');
     } else {
       setScreen('RESULTS');
     }
@@ -499,6 +532,32 @@ export default function App() {
           }
         />
       )}
+
+      {screen === 'CHAMPION_CELEBRATION' && lastResult && (() => {
+        const sortedWithLevels = [...areas]
+          .sort((a, b) => a.order - b.order)
+          .filter((a) => a.levels.length > 0);
+        const finalArea = sortedWithLevels[sortedWithLevels.length - 1];
+        const finalLevel = finalArea?.levels[finalArea.levels.length - 1];
+        const monsterId = activeBattle?.level.monsterId || finalLevel?.monsterId || 'raja_matematika';
+        const finalMonsterName = monsters[monsterId]?.name || 'Raja Matematika';
+        const totalAreasCount = sortedWithLevels.length;
+        const totalLevelsCount = sortedWithLevels.reduce((sum, a) => sum + a.levels.length, 0);
+
+        return (
+          <ChampionCelebrationScreen
+            record={lastResult}
+            heroes={heroes}
+            finalMonsterName={finalMonsterName}
+            totalAreasCount={totalAreasCount}
+            totalLevelsCount={totalLevelsCount}
+            onContinueToResults={() => {
+              soundEngine.playMenuClick();
+              setScreen('RESULTS');
+            }}
+          />
+        );
+      })()}
 
       {screen === 'RESULTS' && lastResult && (
         <ResultsScreen
