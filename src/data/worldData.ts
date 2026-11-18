@@ -10,8 +10,42 @@ import {
   PlayerProfile,
 } from '../types/game';
 
-export const TITLE_BACKDROP_IMG = '/src/assets/images/title_backdrop_1794693783302.jpg';
-export const WORLD_MAP_IMG = '/src/assets/images/world_map_backdrop_1794693782851.jpg';
+import titleBackdropImg from '../assets/images/title_backdrop_1794693783302.jpg';
+import worldMapBackdropImg from '../assets/images/world_map_backdrop_1794693782851.jpg';
+import areaForestBgImg from '../assets/images/area_forest_bg_1794693783461.jpg';
+import areaCavernBgImg from '../assets/images/area_cavern_bg_1794693784316.jpg';
+import areaCastleBgImg from '../assets/images/area_castle_bg_1794693784033.jpg';
+import areaPeaksBgImg from '../assets/images/area_peaks_bg_1794693785687.jpg';
+import areaTowerBgImg from '../assets/images/area_tower_bg_1794693785850.jpg';
+
+export const TITLE_BACKDROP_IMG = titleBackdropImg;
+export const WORLD_MAP_IMG = worldMapBackdropImg;
+
+export const AREA_BG_IMAGES = {
+  forest: areaForestBgImg,
+  cavern: areaCavernBgImg,
+  castle: areaCastleBgImg,
+  peaks: areaPeaksBgImg,
+  tower: areaTowerBgImg,
+  citadel: titleBackdropImg,
+} as const;
+
+const LEGACY_BG_MAP: Record<string, string> = {
+  'area_forest_bg_1794693783461.jpg': areaForestBgImg,
+  'area_cavern_bg_1794693784316.jpg': areaCavernBgImg,
+  'area_castle_bg_1794693784033.jpg': areaCastleBgImg,
+  'area_peaks_bg_1794693785687.jpg': areaPeaksBgImg,
+  'area_tower_bg_1794693785850.jpg': areaTowerBgImg,
+  'title_backdrop_1794693783302.jpg': titleBackdropImg,
+  'world_map_backdrop_1794693782851.jpg': worldMapBackdropImg,
+};
+
+export function resolveAreaBgImage(bgPath?: string): string {
+  if (!bgPath) return areaCastleBgImg;
+  const matched = Object.entries(LEGACY_BG_MAP).find(([fileName]) => bgPath.includes(fileName));
+  if (matched) return matched[1];
+  return bgPath;
+}
 
 export const HERO_VISUAL_OPTIONS: Array<{
   id: HeroId;
@@ -312,7 +346,7 @@ export const DEFAULT_AREAS: AreaDef[] = [
     mathTopic: 'Operasi Hitung & Bilangan',
     description: 'Pelajari operasi bilangan bulat, kelipatan, faktor, dan sifat hitung di rimba bercahaya.',
     gradeRecommendation: 'SD Kelas 4–6 / SMP Awal',
-    bgImage: '/src/assets/images/area_forest_bg_1794693783461.jpg',
+    bgImage: areaForestBgImg,
     fallbackGradient: 'linear-gradient(180deg, #064e3b 0%, #022c22 100%)',
     accentColor: '#10b981',
     mapPos: { x: 20, y: 74 },
@@ -347,7 +381,7 @@ export const DEFAULT_AREAS: AreaDef[] = [
     mathTopic: 'Pecahan, Desimal & Persen',
     description: 'Temukan rahasia pecahan senilai, operasi pecahan, desimal, dan persentase di gua kristal.',
     gradeRecommendation: 'SD Kelas 5–6 / SMP',
-    bgImage: '/src/assets/images/area_cavern_bg_1794693784316.jpg',
+    bgImage: areaCavernBgImg,
     fallbackGradient: 'linear-gradient(180deg, #3b0764 0%, #0f172a 100%)',
     accentColor: '#a855f7',
     mapPos: { x: 25, y: 34 },
@@ -383,7 +417,7 @@ export const DEFAULT_AREAS: AreaDef[] = [
     mathTopic: 'Bangun Datar, Ruang & Sudut',
     description: 'Hitung keliling, luas, volume, dan besar sudut untuk membuka gerbang benteng batu.',
     gradeRecommendation: 'SD Kelas 5–SMP Kelas 8',
-    bgImage: '/src/assets/images/area_castle_bg_1794693784033.jpg',
+    bgImage: areaCastleBgImg,
     fallbackGradient: 'linear-gradient(180deg, #78350f 0%, #1e293b 100%)',
     accentColor: '#f59e0b',
     mapPos: { x: 51, y: 43 },
@@ -419,7 +453,7 @@ export const DEFAULT_AREAS: AreaDef[] = [
     mathTopic: 'Pola, Variabel & Persamaan',
     description: 'Pecahkan pola barisan, bentuk aljabar, dan persamaan linear di puncak gunung berawan.',
     gradeRecommendation: 'SMP Kelas 7–9',
-    bgImage: '/src/assets/images/area_peaks_bg_1794693785687.jpg',
+    bgImage: areaPeaksBgImg,
     fallbackGradient: 'linear-gradient(180deg, #312e81 0%, #090d16 100%)',
     accentColor: '#6366f1',
     mapPos: { x: 74, y: 20 },
@@ -455,7 +489,7 @@ export const DEFAULT_AREAS: AreaDef[] = [
     mathTopic: 'Data, Peluang & Penalaran',
     description: 'Analisis rata-rata, diagram, peluang kejadian, dan teka-teki logika di observatorium bintang.',
     gradeRecommendation: 'SMP / SMA Awal',
-    bgImage: '/src/assets/images/area_tower_bg_1794693785850.jpg',
+    bgImage: areaTowerBgImg,
     fallbackGradient: 'linear-gradient(180deg, #0c4a6e 0%, #020617 100%)',
     accentColor: '#0ea5e9',
     mapPos: { x: 89, y: 44 },
@@ -491,7 +525,7 @@ export const DEFAULT_AREAS: AreaDef[] = [
     mathTopic: 'Campuran & Pengayaan HOTS',
     description: 'Uji ketangguhan penuh menghadapi soal HOTS bertingkat lintas topik yang lebih rumit melawan sang Raja Matematika.',
     gradeRecommendation: 'Pengayaan & Evaluasi Akhir',
-    bgImage: '/src/assets/images/title_backdrop_1794693783302.jpg',
+    bgImage: titleBackdropImg,
     fallbackGradient: 'linear-gradient(180deg, #881337 0%, #0f172a 100%)',
     accentColor: '#f43f5e',
     mapPos: { x: 63, y: 75 },

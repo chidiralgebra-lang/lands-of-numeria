@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   HEROES,
   MONSTERS,
+  resolveAreaBgImage,
 } from '../data/worldData';
 import {
   AreaDef,
@@ -80,6 +81,9 @@ export function saveQuestions(questions: Question[]): void {
 export function loadAreas(): AreaDef[] {
   const saved = safeRead<AreaDef[] | null>(KEYS.AREAS, null);
   if (saved && Array.isArray(saved) && saved.length > 0) {
+    const normalizeAreas = (list: AreaDef[]): AreaDef[] =>
+      list.map((a) => ({ ...a, bgImage: resolveAreaBgImage(a.bgImage) }));
+
     try {
       if (localStorage.getItem(MIGRATION_KEYS.DIMENSI_DIFF_V1) !== '1') {
         localStorage.setItem(MIGRATION_KEYS.DIMENSI_DIFF_V1, '1');
@@ -100,14 +104,15 @@ export function loadAreas(): AreaDef[] {
           };
         });
         if (changed) {
-          safeWrite(KEYS.AREAS, upgraded);
-          return upgraded;
+          const normalized = normalizeAreas(upgraded);
+          safeWrite(KEYS.AREAS, normalized);
+          return normalized;
         }
       }
     } catch {
       // Ignore storage migration errors
     }
-    return saved;
+    return normalizeAreas(saved);
   }
   return DEFAULT_AREAS;
 }

@@ -15,7 +15,7 @@ import {
   VolumeX,
   XCircle,
 } from 'lucide-react';
-import { HEROES, MONSTERS } from '../data/worldData';
+import { HEROES, MONSTERS, resolveAreaBgImage } from '../data/worldData';
 import {
   AreaDef,
   AttemptRecord,
@@ -698,7 +698,7 @@ export const BattleArenaScreen: React.FC<BattleArenaScreenProps> = ({
           hero={currentHeroDef}
           equippedAccessory={mode === 'solo' ? profile.equippedAccessory : null}
           monster={monster}
-          bgImage={area.bgImage}
+          bgImage={resolveAreaBgImage(area.bgImage)}
           fallbackGradient={area.fallbackGradient}
           accentColor={area.accentColor}
           reducedMotion={settings.reducedMotion}

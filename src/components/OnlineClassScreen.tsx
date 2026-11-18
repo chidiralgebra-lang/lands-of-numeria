@@ -12,6 +12,7 @@ import {
 import { HEROES } from '../data/worldData';
 import { HeroDef, HeroId, OnlineRoomSummary, Question } from '../types/game';
 import { soundEngine } from '../utils/audioEngine';
+import { getApiUrl } from '../utils/api';
 import { HeroPortraitSvg } from './CharacterSvg';
 
 interface OnlineClassScreenProps {
@@ -62,9 +63,18 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
     explanation: string;
   } | null>(null);
 
+  const parseRoomJson = async (res: Response) => {
+    const raw = await res.text();
+    try {
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      throw new Error('Layanan sesi kelas daring (/api/rooms) belum aktif di server hosting.');
+    }
+  };
+
   const fetchRoomSnapshot = async (code: string, pid: string) => {
     try {
-      const res = await fetch(`/api/rooms/${code}?participantId=${encodeURIComponent(pid)}`);
+      const res = await fetch(getApiUrl(`/api/rooms/${code}?participantId=${encodeURIComponent(pid)}`));
       if (res.ok) {
         const data = (await res.json()) as RoomState;
         setRoom(data);
@@ -76,16 +86,23 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
 
   useEffect(() => {
     if (!room?.code || !participantId) return;
-    const evtSource = new EventSource(`/api/rooms/${room.code}/stream`);
+    const evtSource = new EventSource(getApiUrl(`/api/rooms/${room.code}/stream`));
     evtSource.onmessage = () => {
       fetchRoomSnapshot(room.code, participantId);
     };
     const poll = window.setInterval(() => {
       fetchRoomSnapshot(room.code, participantId);
-    }, 3500);
+    }, 2500);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchRoomSnapshot(room.code, participantId);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       evtSource.close();
       window.clearInterval(poll);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [room?.code, participantId]);
 
@@ -99,12 +116,12 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
     setLoading(true);
     setErrorMsg('');
     try {
-      const res = await fetch(`/api/rooms/${cleanCode}/join`, {
+      const res = await fetch(getApiUrl(`/api/rooms/${cleanCode}/join`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: nameInput.trim(), heroId }),
       });
-      const data = await res.json();
+      const data = await parseRoomJson(res);
       if (!res.ok) {
         setErrorMsg(data.error || 'Gagal bergabung ke kelas.');
       } else {
@@ -112,8 +129,10 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
         setRoom(data.room);
         soundEngine.playMenuClick();
       }
-    } catch {
-      setErrorMsg('Tidak dapat terhubung ke server kelas.');
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Tidak dapat terhubung ke server kelas.'
+      );
     } finally {
       setLoading(false);
     }
@@ -128,7 +147,7 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
     setSubmitting(true);
     setErrorMsg('');
     try {
-      const res = await fetch(`/api/rooms/${room.code}/answer`, {
+      const res = await fetch(getApiUrl(`/api/rooms/${room.code}/answer`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -137,7 +156,7 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
           answer: trimmed,
         }),
       });
-      const data = await res.json();
+      const data = await parseRoomJson(res);
       if (!res.ok) {
         setErrorMsg(data.error || 'Gagal mengirim jawaban.');
       } else {
@@ -150,8 +169,12 @@ export const OnlineClassScreen: React.FC<OnlineClassScreenProps> = ({
         });
         fetchRoomSnapshot(room.code, participantId);
       }
-    } catch {
-      setErrorMsg('Koneksi terputus saat mengirim jawaban. Coba kirim ulang.');
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : 'Koneksi terputus saat mengirim jawaban. Coba kirim ulang.'
+      );
     } finally {
       setSubmitting(false);
     }

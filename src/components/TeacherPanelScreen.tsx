@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -21,7 +21,7 @@ import {
   Upload,
   Users,
 } from 'lucide-react';
-import { HEROES, MONSTERS } from '../data/worldData';
+import { AREA_BG_IMAGES, HEROES, MONSTERS } from '../data/worldData';
 import {
   AreaDef,
   AttemptRecord,
@@ -35,6 +35,7 @@ import {
   QuestionType,
 } from '../types/game';
 import { generateCsvTemplate, parseQuestionsFromCsv } from '../utils/mathEvaluator';
+import { getApiUrl } from '../utils/api';
 import { HeroMonsterEditorTab } from './HeroMonsterEditorTab';
 import { PrintableReportSheet } from './PrintableReportSheet';
 import {
@@ -121,7 +122,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   const [newAreaTopic, setNewAreaTopic] = useState('');
   const [newAreaGrade, setNewAreaGrade] = useState('Kelas 7');
   const [newAreaDesc, setNewAreaDesc] = useState('');
-  const [newAreaBg, setNewAreaBg] = useState('/src/assets/images/area_castle_bg_1794693784033.jpg');
+  const [newAreaBg, setNewAreaBg] = useState<string>(AREA_BG_IMAGES.castle);
   const [newAreaMonster, setNewAreaMonster] = useState('penjaga_sudut');
   const [editingArea, setEditingArea] = useState<AreaDef | null>(null);
   const [editAreaOldTopic, setEditAreaOldTopic] = useState('');
@@ -283,34 +284,109 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
     setEditingQuestion(null);
   };
 
-  const handleFileUploadForAi = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImageForAi = (file: File): Promise<{ mimeType: string; base64: string }> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Gagal membaca gambar.'));
+      reader.onload = () => {
+        const dataUrl = String(reader.result || '');
+        const img = new Image();
+        img.onerror = () => {
+          resolve({
+            mimeType: file.type || 'image/jpeg',
+            base64: dataUrl.split(',')[1] || '',
+          });
+        };
+        img.onload = () => {
+          const maxSide = 1600;
+          const scale = Math.min(1, maxSide / Math.max(img.width || 1, img.height || 1));
+          const targetW = Math.max(1, Math.round((img.width || 1) * scale));
+          const targetH = Math.max(1, Math.round((img.height || 1) * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve({
+              mimeType: file.type || 'image/jpeg',
+              base64: dataUrl.split(',')[1] || '',
+            });
+            return;
+          }
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, targetW, targetH);
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+          const compressedUrl = canvas.toDataURL('image/jpeg', 0.82);
+          resolve({
+            mimeType: 'image/jpeg',
+            base64: compressedUrl.split(',')[1] || '',
+          });
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
+
+  const handleFileUploadForAi = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
+
+    if (/\.(doc|docx)$/i.test(file.name)) {
+      setDocError(
+        'Format Word (.doc/.docx) belum didukung langsung. Silakan simpan sebagai PDF atau salin-tempel teks soal ke kolom di bawah.'
+      );
+      return;
+    }
+
     if (file.size > 10 * 1024 * 1024) {
       setDocError('Ukuran berkas maksimal 10 MB.');
       return;
     }
+
     setDocError('');
-    if (file.type.startsWith('text/') || file.name.endsWith('.csv') || file.name.endsWith('.md')) {
+    if (file.type.startsWith('text/') || /\.(txt|csv|md)$/i.test(file.name)) {
       const reader = new FileReader();
       reader.onload = () => {
         setDocText(String(reader.result || ''));
         setDocFile(null);
       };
       reader.readAsText(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = String(reader.result || '');
-        const base64 = result.split(',')[1] || '';
+      return;
+    }
+
+    if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name)) {
+      try {
+        const compressed = await compressImageForAi(file);
         setDocFile({
           name: file.name,
-          mimeType: file.type || 'application/pdf',
-          base64,
+          mimeType: compressed.mimeType,
+          base64: compressed.base64,
         });
-      };
-      reader.readAsDataURL(file);
+      } catch {
+        setDocError('Gagal memproses berkas gambar. Coba unggah ulang.');
+      }
+      return;
     }
+
+    if (file.size > 3.8 * 1024 * 1024) {
+      setDocError(
+        'Berkas PDF melebihi ~3,8 MB (batas payload hosting serverless ~6 MB setelah encoding). Perkecil ukuran PDF atau tempelkan teks soal langsung.'
+      );
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const base64 = result.split(',')[1] || '';
+      setDocFile({
+        name: file.name,
+        mimeType: file.type || 'application/pdf',
+        base64,
+      });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleExtractWithGemini = async () => {
@@ -318,11 +394,18 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
       setDocError('Unggah berkas dokumen atau tempelkan teks materi/kisi-kisi terlebih dahulu.');
       return;
     }
+    if (docFile && docFile.base64.length > 5_200_000) {
+      setDocError(
+        'Ukuran dokumen setelah encoding terlalu besar untuk fungsi serverless hosting. Kompres PDF/gambar atau tempelkan teks materi langsung.'
+      );
+      return;
+    }
+
     setDocLoading(true);
     setDocError('');
     setExtractedPreview(null);
     try {
-      const res = await fetch('/api/extract-questions', {
+      const res = await fetch(getApiUrl('/api/extract-questions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -335,7 +418,38 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
           questionCount: docCount,
         }),
       });
-      const data = await res.json();
+
+      if (res.status === 413) {
+        setDocError(
+          'Ukuran berkas melebihi batas payload fungsi serverless hosting (maks. ~4 MB setelah encoding). Kompres PDF/gambar atau tempelkan teks materi langsung.'
+        );
+        return;
+      }
+
+      if (res.status === 502 || res.status === 504) {
+        setDocError(
+          'Proses analisis melebihi batas waktu server (timeout). Coba kurangi jumlah halaman PDF, perkecil gambar, atau tempelkan teks soal secara langsung.'
+        );
+        return;
+      }
+
+      const rawText = await res.text();
+      let data: {
+        error?: string;
+        detectedSummary?: string;
+        unreadableWarning?: string;
+        questions?: Partial<Question>[];
+      } = {};
+
+      try {
+        data = rawText ? (JSON.parse(rawText) as typeof data) : {};
+      } catch {
+        setDocError(
+          'Endpoint AI /api/extract-questions belum aktif di web hosting ini. Pastikan seluruh repositori (termasuk netlify.toml & folder netlify/functions) di-deploy, dan Environment Variable GEMINI_API_KEY sudah diisi di pengaturan Netlify.'
+        );
+        return;
+      }
+
       if (!res.ok) {
         setDocError(data.error || 'Gagal memproses dokumen.');
         return;
@@ -441,11 +555,11 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   };
 
   const AREA_BG_OPTIONS = [
-    { label: 'Hutan Rimbun', path: '/src/assets/images/area_forest_bg_1794693783461.jpg' },
-    { label: 'Gua Kristal', path: '/src/assets/images/area_cavern_bg_1794693784316.jpg' },
-    { label: 'Kastil Batu', path: '/src/assets/images/area_castle_bg_1794693784033.jpg' },
-    { label: 'Pegunungan Senja', path: '/src/assets/images/area_peaks_bg_1794693785687.jpg' },
-    { label: 'Menara Observatorium', path: '/src/assets/images/area_tower_bg_1794693785850.jpg' },
+    { label: 'Hutan Rimbun', path: AREA_BG_IMAGES.forest },
+    { label: 'Gua Kristal', path: AREA_BG_IMAGES.cavern },
+    { label: 'Kastil Batu', path: AREA_BG_IMAGES.castle },
+    { label: 'Pegunungan Senja', path: AREA_BG_IMAGES.peaks },
+    { label: 'Menara Observatorium', path: AREA_BG_IMAGES.tower },
   ];
 
   const handleCreateArea = (e: React.FormEvent) => {
@@ -536,6 +650,33 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
     setEditingArea(null);
   };
 
+  const parseApiJson = async <T,>(res: Response): Promise<T & { error?: string }> => {
+    const raw = await res.text();
+    try {
+      return raw ? (JSON.parse(raw) as T & { error?: string }) : ({} as T & { error?: string });
+    } catch {
+      throw new Error(
+        'Layanan sesi kelas daring (/api/rooms) belum aktif di hosting ini. Pastikan deploy menyertakan Netlify Functions (netlify.toml) atau server backend aktif.'
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (!activeRoom || activeRoom.status === 'ENDED' || tab !== 'kelas') return;
+    const poll = window.setInterval(async () => {
+      try {
+        const res = await fetch(getApiUrl(`/api/rooms/${activeRoom.code}`));
+        if (res.ok) {
+          const updated = await res.json();
+          setActiveRoom(updated);
+        }
+      } catch {
+        // Ignore transient poll errors
+      }
+    }, 2500);
+    return () => window.clearInterval(poll);
+  }, [activeRoom?.code, activeRoom?.status, tab]);
+
   const handleCreateOnlineRoom = async () => {
     const pool = questions.filter((q) => roomTopic === 'ALL' || q.topic === roomTopic);
     if (pool.length === 0) {
@@ -545,7 +686,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
     setRoomLoading(true);
     setRoomError('');
     try {
-      const res = await fetch('/api/rooms', {
+      const res = await fetch(getApiUrl('/api/rooms'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -560,11 +701,13 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
           questionPool: pool,
         }),
       });
-      const data = await res.json();
+      const data = await parseApiJson<OnlineRoomSummary>(res);
       if (!res.ok) setRoomError(data.error || 'Gagal membuat sesi kelas.');
       else setActiveRoom(data);
-    } catch {
-      setRoomError('Server tidak merespons saat membuat ruang kelas.');
+    } catch (err) {
+      setRoomError(
+        err instanceof Error ? err.message : 'Server tidak merespons saat membuat ruang kelas.'
+      );
     } finally {
       setRoomLoading(false);
     }
@@ -572,20 +715,38 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
 
   const handleRefreshRoom = async () => {
     if (!activeRoom) return;
-    const res = await fetch(`/api/rooms/${activeRoom.code}`);
-    if (res.ok) setActiveRoom(await res.json());
+    try {
+      const res = await fetch(getApiUrl(`/api/rooms/${activeRoom.code}`));
+      const data = await parseApiJson<OnlineRoomSummary>(res);
+      if (res.ok) setActiveRoom(data);
+      else setRoomError(data.error || 'Gagal menyegarkan sesi.');
+    } catch (err) {
+      setRoomError(err instanceof Error ? err.message : 'Gagal menghubungi server kelas.');
+    }
   };
 
   const handleStartRoom = async () => {
     if (!activeRoom) return;
-    const res = await fetch(`/api/rooms/${activeRoom.code}/start`, { method: 'POST' });
-    if (res.ok) setActiveRoom(await res.json());
+    try {
+      const res = await fetch(getApiUrl(`/api/rooms/${activeRoom.code}/start`), { method: 'POST' });
+      const data = await parseApiJson<OnlineRoomSummary>(res);
+      if (res.ok) setActiveRoom(data);
+      else setRoomError(data.error || 'Gagal memulai pertandingan.');
+    } catch (err) {
+      setRoomError(err instanceof Error ? err.message : 'Gagal menghubungi server kelas.');
+    }
   };
 
   const handleEndRoom = async () => {
     if (!activeRoom) return;
-    const res = await fetch(`/api/rooms/${activeRoom.code}/end`, { method: 'POST' });
-    if (res.ok) setActiveRoom(await res.json());
+    try {
+      const res = await fetch(getApiUrl(`/api/rooms/${activeRoom.code}/end`), { method: 'POST' });
+      const data = await parseApiJson<OnlineRoomSummary>(res);
+      if (res.ok) setActiveRoom(data);
+      else setRoomError(data.error || 'Gagal mengakhiri sesi.');
+    } catch (err) {
+      setRoomError(err instanceof Error ? err.message : 'Gagal menghubungi server kelas.');
+    }
   };
 
   const handleSaveEssayScore = (attemptId: string, qIdx: number, scorePct: number, note: string) => {
@@ -982,16 +1143,27 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
               </div>
 
               <div className="space-y-2">
-                <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-semibold text-white cursor-pointer">
-                  <FileText className="w-4 h-4 text-sky-400" />
-                  <span>{docFile ? `Berkas dipilih: ${docFile.name}` : 'Pilih File PDF / Gambar / Teks'}</span>
-                  <input
-                    type="file"
-                    accept=".pdf,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"
-                    className="hidden"
-                    onChange={handleFileUploadForAi}
-                  />
-                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-semibold text-white cursor-pointer">
+                    <FileText className="w-4 h-4 text-sky-400" />
+                    <span>{docFile ? `Berkas dipilih: ${docFile.name}` : 'Pilih File PDF / Gambar / Teks'}</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"
+                      className="hidden"
+                      onChange={handleFileUploadForAi}
+                    />
+                  </label>
+                  {docFile && (
+                    <button
+                      type="button"
+                      onClick={() => setDocFile(null)}
+                      className="px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-rose-950/70 border border-slate-700 hover:border-rose-500/40 text-xs font-semibold text-slate-300 hover:text-rose-200 cursor-pointer"
+                    >
+                      Hapus Berkas
+                    </button>
+                  )}
+                </div>
 
                 <textarea
                   rows={5}
