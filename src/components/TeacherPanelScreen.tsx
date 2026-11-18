@@ -2,20 +2,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
-  Check,
   CheckCircle2,
   Copy,
   Download,
-  FileText,
   GraduationCap,
-  Loader2,
   Lock,
   Pencil,
   Plus,
   Printer,
   RotateCcw,
   Search,
-  Sparkles,
   Trash2,
   Unlock,
   Upload,
@@ -64,7 +60,7 @@ interface TeacherPanelScreenProps {
   onBack: () => void;
 }
 
-type TeacherTab = 'bank' | 'dokumen' | 'dunia' | 'karakter' | 'kelas' | 'laporan';
+type TeacherTab = 'bank' | 'dunia' | 'karakter' | 'kelas' | 'laporan';
 
 export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   questions,
@@ -99,20 +95,6 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
   // Manual Question Form Modal
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [showQuestionForm, setShowQuestionForm] = useState(false);
-
-  // Document AI Extraction State
-  const [docText, setDocText] = useState('');
-  const [docFile, setDocFile] = useState<{ name: string; mimeType: string; base64: string } | null>(null);
-  const [docGrade, setDocGrade] = useState('SMP Kelas 7');
-  const [docTopic, setDocTopic] = useState('');
-  const [docCount, setDocCount] = useState(5);
-  const [docLoading, setDocLoading] = useState(false);
-  const [docError, setDocError] = useState('');
-  const [extractedPreview, setExtractedPreview] = useState<{
-    summary: string;
-    warning: string;
-    items: Array<Question & { approved: boolean }>;
-  } | null>(null);
 
   // CSV / JSON Import Feedback
   const [importStatus, setImportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -282,235 +264,6 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
     }
     setShowQuestionForm(false);
     setEditingQuestion(null);
-  };
-
-  const compressImageForAi = (file: File): Promise<{ mimeType: string; base64: string }> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error('Gagal membaca gambar.'));
-      reader.onload = () => {
-        const dataUrl = String(reader.result || '');
-        const img = new Image();
-        img.onerror = () => {
-          resolve({
-            mimeType: file.type || 'image/jpeg',
-            base64: dataUrl.split(',')[1] || '',
-          });
-        };
-        img.onload = () => {
-          const maxSide = 1600;
-          const scale = Math.min(1, maxSide / Math.max(img.width || 1, img.height || 1));
-          const targetW = Math.max(1, Math.round((img.width || 1) * scale));
-          const targetH = Math.max(1, Math.round((img.height || 1) * scale));
-          const canvas = document.createElement('canvas');
-          canvas.width = targetW;
-          canvas.height = targetH;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve({
-              mimeType: file.type || 'image/jpeg',
-              base64: dataUrl.split(',')[1] || '',
-            });
-            return;
-          }
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, targetW, targetH);
-          ctx.drawImage(img, 0, 0, targetW, targetH);
-          const compressedUrl = canvas.toDataURL('image/jpeg', 0.82);
-          resolve({
-            mimeType: 'image/jpeg',
-            base64: compressedUrl.split(',')[1] || '',
-          });
-        };
-        img.src = dataUrl;
-      };
-      reader.readAsDataURL(file);
-    });
-
-  const handleFileUploadForAi = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-
-    if (/\.(doc|docx)$/i.test(file.name)) {
-      setDocError(
-        'Format Word (.doc/.docx) belum didukung langsung. Silakan simpan sebagai PDF atau salin-tempel teks soal ke kolom di bawah.'
-      );
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      setDocError('Ukuran berkas maksimal 10 MB.');
-      return;
-    }
-
-    setDocError('');
-    if (file.type.startsWith('text/') || /\.(txt|csv|md)$/i.test(file.name)) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setDocText(String(reader.result || ''));
-        setDocFile(null);
-      };
-      reader.readAsText(file);
-      return;
-    }
-
-    if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name)) {
-      try {
-        const compressed = await compressImageForAi(file);
-        setDocFile({
-          name: file.name,
-          mimeType: compressed.mimeType,
-          base64: compressed.base64,
-        });
-      } catch {
-        setDocError('Gagal memproses berkas gambar. Coba unggah ulang.');
-      }
-      return;
-    }
-
-    if (file.size > 3.8 * 1024 * 1024) {
-      setDocError(
-        'Berkas PDF melebihi ~3,8 MB (batas payload hosting serverless ~6 MB setelah encoding). Perkecil ukuran PDF atau tempelkan teks soal langsung.'
-      );
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || '');
-      const base64 = result.split(',')[1] || '';
-      setDocFile({
-        name: file.name,
-        mimeType: file.type || 'application/pdf',
-        base64,
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleExtractWithGemini = async () => {
-    if (!docText.trim() && !docFile) {
-      setDocError('Unggah berkas dokumen atau tempelkan teks materi/kisi-kisi terlebih dahulu.');
-      return;
-    }
-    if (docFile && docFile.base64.length > 5_200_000) {
-      setDocError(
-        'Ukuran dokumen setelah encoding terlalu besar untuk fungsi serverless hosting. Kompres PDF/gambar atau tempelkan teks materi langsung.'
-      );
-      return;
-    }
-
-    setDocLoading(true);
-    setDocError('');
-    setExtractedPreview(null);
-    try {
-      const res = await fetch(getApiUrl('/api/extract-questions'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          textContent: docText.trim() || undefined,
-          fileBase64: docFile?.base64,
-          fileMimeType: docFile?.mimeType,
-          fileName: docFile?.name || 'Teks Guru',
-          gradeLevel: docGrade,
-          targetTopic: docTopic || undefined,
-          questionCount: docCount,
-        }),
-      });
-
-      if (res.status === 413) {
-        setDocError(
-          'Ukuran berkas melebihi batas payload fungsi serverless hosting (maks. ~4 MB setelah encoding). Kompres PDF/gambar atau tempelkan teks materi langsung.'
-        );
-        return;
-      }
-
-      if (res.status === 502 || res.status === 504) {
-        setDocError(
-          'Proses analisis melebihi batas waktu server (timeout). Coba kurangi jumlah halaman PDF, perkecil gambar, atau tempelkan teks soal secara langsung.'
-        );
-        return;
-      }
-
-      const rawText = await res.text();
-      let data: {
-        error?: string;
-        detectedSummary?: string;
-        unreadableWarning?: string;
-        questions?: Partial<Question>[];
-      } = {};
-
-      try {
-        data = rawText ? (JSON.parse(rawText) as typeof data) : {};
-      } catch {
-        setDocError(
-          'Endpoint AI /api/extract-questions belum aktif di web hosting ini. Pastikan seluruh repositori (termasuk netlify.toml & folder netlify/functions) di-deploy, dan Environment Variable GEMINI_API_KEY sudah diisi di pengaturan Netlify.'
-        );
-        return;
-      }
-
-      if (!res.ok) {
-        setDocError(data.error || 'Gagal memproses dokumen.');
-        return;
-      }
-
-      const mapped = (data.questions || []).map((raw: Partial<Question>, idx: number) => ({
-        id: `ai-${Date.now()}-${idx}`,
-        subject: raw.subject || 'Matematika',
-        gradeLevel: raw.gradeLevel || docGrade,
-        topic: raw.topic || docTopic || 'Operasi Hitung & Bilangan',
-        subtopic: raw.subtopic || 'Umum',
-        indicator: raw.indicator || 'Sesuai dokumen sumber',
-        sourceDoc: docFile?.name || 'Dokumen Materi Guru',
-        sourcePage: raw.sourcePage,
-        difficulty: (['mudah', 'sedang', 'sulit'].includes(String(raw.difficulty))
-          ? raw.difficulty
-          : 'sedang') as Difficulty,
-        type: (['pilihan_ganda', 'benar_salah', 'isian', 'uraian'].includes(String(raw.type))
-          ? raw.type
-          : 'pilihan_ganda') as QuestionType,
-        prompt: raw.prompt || '',
-        options: raw.options,
-        correctAnswer: raw.correctAnswer || '',
-        acceptedAlternatives: raw.acceptedAlternatives,
-        numericValue: raw.numericValue,
-        unit: raw.unit,
-        explanation: raw.explanation || '',
-        rubric: raw.rubric,
-        baseScore: 100,
-        estimatedSeconds: 45,
-        tags: ['ekstraksi-dokumen'],
-        verificationStatus: 'perlu_tinjau' as const,
-        isAiGenerated: Boolean(raw.isAiGenerated),
-        isDemo: false,
-        approved: true,
-      }));
-
-      setExtractedPreview({
-        summary: data.detectedSummary || 'Dokumen dianalisis.',
-        warning: data.unreadableWarning || '',
-        items: mapped,
-      });
-    } catch {
-      setDocError('Gagal menghubungi layanan ekstraksi dokumen server.');
-    } finally {
-      setDocLoading(false);
-    }
-  };
-
-  const handleSaveApprovedExtractions = () => {
-    if (!extractedPreview) return;
-    const approved = extractedPreview.items
-      .filter((i) => i.approved)
-      .map(({ approved: _a, ...rest }) => ({
-        ...rest,
-        verificationStatus: 'tervalidasi_guru' as const,
-      }));
-    if (approved.length === 0) return;
-    onUpdateQuestions([...approved, ...questions]);
-    setExtractedPreview(null);
-    setTab('bank');
   };
 
   const handleCsvJsonImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -863,7 +616,6 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
           {(
             [
               ['bank', 'Bank Soal'],
-              ['dokumen', 'Impor Dokumen AI'],
               ['dunia', 'Peta & Wilayah'],
               ['karakter', 'Hero & Monster'],
               ['kelas', 'Sesi & Aturan'],
@@ -1032,7 +784,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
             {/* Question List */}
             {filteredQuestions.length === 0 ? (
               <div className="p-10 rounded-2xl bg-slate-900 border border-slate-800 text-center text-sm text-slate-400">
-                Belum ada soal yang cocok dengan filter ini. Klik "Buat Soal Baru" atau gunakan "Impor Dokumen AI".
+                Belum ada soal yang cocok dengan filter ini. Klik "Buat Soal Baru" atau gunakan "Impor CSV / JSON".
               </div>
             ) : (
               <div className="space-y-3">
@@ -1089,172 +841,7 @@ export const TeacherPanelScreen: React.FC<TeacherPanelScreenProps> = ({
           </div>
         )}
 
-        {/* ================= TAB 2: IMPOR DOKUMEN AI ================= */}
-        {tab === 'dokumen' && (
-          <div className="space-y-5">
-            <div className="rounded-2xl bg-slate-900 border border-slate-800 p-6 space-y-4">
-              <div className="flex items-start gap-3">
-                <Sparkles className="w-6 h-6 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <h2 className="font-display text-xl font-bold text-white">
-                    Ekstraksi Bank Soal dari Dokumen / Kisi-Kisi
-                  </h2>
-                  <p className="text-sm text-slate-300 mt-1">
-                    Unggah berkas PDF, gambar soal, modul ajar, atau tempelkan teks kisi-kisi. Sistem server
-                    Gemini AI akan menganalisis materi, mengekstrak soal atau menyusun soal sesuai indikator, lalu
-                    menampilkan pratinjau agar guru dapat memvalidasi sebelum disimpan.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Jenjang / Kelas</label>
-                  <input
-                    type="text"
-                    value={docGrade}
-                    onChange={(e) => setDocGrade(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-sm text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Topik Target (Opsional)
-                  </label>
-                  <input
-                    type="text"
-                    value={docTopic}
-                    onChange={(e) => setDocTopic(e.target.value)}
-                    placeholder="Kosongkan agar ikuti dokumen"
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-sm text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Maksimal Soal</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={docCount}
-                    onChange={(e) => setDocCount(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-sm text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-semibold text-white cursor-pointer">
-                    <FileText className="w-4 h-4 text-sky-400" />
-                    <span>{docFile ? `Berkas dipilih: ${docFile.name}` : 'Pilih File PDF / Gambar / Teks'}</span>
-                    <input
-                      type="file"
-                      accept=".pdf,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"
-                      className="hidden"
-                      onChange={handleFileUploadForAi}
-                    />
-                  </label>
-                  {docFile && (
-                    <button
-                      type="button"
-                      onClick={() => setDocFile(null)}
-                      className="px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-rose-950/70 border border-slate-700 hover:border-rose-500/40 text-xs font-semibold text-slate-300 hover:text-rose-200 cursor-pointer"
-                    >
-                      Hapus Berkas
-                    </button>
-                  )}
-                </div>
-
-                <textarea
-                  rows={5}
-                  value={docText}
-                  onChange={(e) => setDocText(e.target.value)}
-                  placeholder="Atau tempelkan langsung kisi-kisi, indikator kompetensi, rangkuman materi, atau daftar soal di sini..."
-                  className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white"
-                />
-              </div>
-
-              {docError && (
-                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-xs text-rose-200">
-                  {docError}
-                </div>
-              )}
-
-              <button
-                type="button"
-                disabled={docLoading}
-                onClick={handleExtractWithGemini}
-                className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-slate-950 font-bold text-sm inline-flex items-center gap-2 cursor-pointer"
-              >
-                {docLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                <span>{docLoading ? 'Menganalisis Dokumen...' : 'Analisis & Buat Pratinjau Soal'}</span>
-              </button>
-            </div>
-
-            {extractedPreview && (
-              <div className="rounded-2xl bg-slate-900 border border-sky-500/40 p-6 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="font-bold text-lg text-white">Pratinjau Soal Hasil Analisis</h3>
-                    <p className="text-xs text-sky-300 mt-0.5">{extractedPreview.summary}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSaveApprovedExtractions}
-                    className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm inline-flex items-center gap-2 cursor-pointer"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>
-                      Simpan {extractedPreview.items.filter((i) => i.approved).length} Soal Disetujui
-                    </span>
-                  </button>
-                </div>
-
-                {extractedPreview.warning && (
-                  <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-500/40 text-xs text-amber-200">
-                    Peringatan Dokumen: {extractedPreview.warning}
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  {extractedPreview.items.map((item, idx) => (
-                    <div key={item.id} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400">
-                          {item.topic} · {item.indicator} ·{' '}
-                          <strong className={item.isAiGenerated ? 'text-purple-300' : 'text-emerald-300'}>
-                            {item.isAiGenerated ? 'Hasil Pengembangan AI' : 'Ekstraksi Langsung'}
-                          </strong>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = extractedPreview.items.map((it, i) =>
-                              i === idx ? { ...it, approved: !it.approved } : it
-                            );
-                            setExtractedPreview({ ...extractedPreview, items: updated });
-                          }}
-                          className={`px-3 py-1 rounded-lg font-bold cursor-pointer ${
-                            item.approved
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                              : 'bg-slate-800 text-slate-400'
-                          }`}
-                        >
-                          {item.approved ? 'Disetujui' : 'Ditolak'}
-                        </button>
-                      </div>
-                      <p className="text-sm font-semibold text-white">{item.prompt}</p>
-                      <p className="text-xs text-emerald-300">Kunci: {item.correctAnswer}</p>
-                      <p className="text-xs text-slate-400">Pembahasan: {item.explanation}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ================= TAB 3: KELOLA WILAYAH & MONSTER ================= */}
+        {/* ================= TAB 2: KELOLA WILAYAH & MONSTER ================= */}
         {tab === 'dunia' && (
           <div className="space-y-5">
             <WorldMapPositionEditor areas={areas} onUpdateAreas={onUpdateAreas} />

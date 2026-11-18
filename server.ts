@@ -5,12 +5,6 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
-  ExtractHttpError,
-  extractQuestionsWithGemini,
-  getGeminiClient,
-  type ExtractQuestionsPayload,
-} from './server/extractQuestions.ts';
-import {
   RoomHttpError,
   createRoomSession,
   endRoomSession,
@@ -46,29 +40,7 @@ app.use('/api', (req: Request, res: Response, next) => {
 });
 
 // ==========================================
-// 1. Gemini Server-Side Question Extraction
-// ==========================================
-app.get('/api/extract-questions', (_req: Request, res: Response) => {
-  res.json({ configured: Boolean(getGeminiClient()) });
-});
-
-app.post('/api/extract-questions', async (req: Request, res: Response) => {
-  try {
-    const result = await extractQuestionsWithGemini(req.body as ExtractQuestionsPayload);
-    res.json(result);
-  } catch (err: unknown) {
-    if (err instanceof ExtractHttpError) {
-      res.status(err.statusCode).json({ error: err.message });
-      return;
-    }
-    const message = err instanceof Error ? err.message : 'Gagal mengekstrak soal dari dokumen.';
-    console.error('Extract questions error:', message);
-    res.status(500).json({ error: message });
-  }
-});
-
-// ==========================================
-// 2. Online Class Battle (Server-Authoritative Rooms + SSE)
+// 1. Online Class Battle (Server-Authoritative Rooms + SSE)
 // ==========================================
 const roomMetas = new Map<string, BattleRoomMeta>();
 const roomParticipants = new Map<string, Map<string, RoomParticipant>>();
